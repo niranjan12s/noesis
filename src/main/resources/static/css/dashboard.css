@@ -1,0 +1,112 @@
+/* Neosis - Observability Platform Styling */
+
+body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at top right, #111e25 0%, #080c0f 50%, #050608 100%);
+    background-attachment: fixed;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #66fcf1;
+}
+
+/* Glassmorphism Styles */
+.glass {
+    background: rgba(15, 20, 30, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.card {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(102, 252, 241, 0.25);
+    box-shadow: 0 12px 40px 0 rgba(102, 252, 241, 0.08);
+}
+
+/* Log Terminal Custom scroll and font */
+.log-terminal {
+    font-family: 'JetBrains Mono', SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    scrollbar-width: thin;
+}
+
+/* SVG D3 Explorer Layout */
+#graph-svg {
+    border-radius: 16px;
+}
+
+.node {
+    stroke-width: 2.5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.node:hover {
+    stroke: #ffffff !important;
+    filter: drop-shadow(0px 0px 8px rgba(102, 252, 241, 0.6));
+}
+
+.link {
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-opacity: 0.6;
+    stroke-dasharray: 2, 2;
+    transition: all 0.2s ease;
+}
+
+.link.highlighted {
+    stroke: #66fcf1;
+    stroke-width: 2.5px;
+    stroke-opacity: 1;
+    stroke-dasharray: none;
+}
+
+.node.highlighted {
+    stroke: #66fcf1 !important;
+    stroke-width: 3.5px;
+    filter: drop-shadow(0px 0px 10px rgba(102, 252, 241, 0.8));
+}
+
+.node-label {
+    fill: #ffffff;
+    font-size: 11px;
+    font-weight: 500;
+    pointer-events: none;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+/* D3 canvas edge text relationship labels */
+.edge-label {
+    fill: rgba(255, 255, 255, 0.65);
+    font-size: 8px;
+    font-weight: bold;
+    font-family: 'JetBrains Mono', monospace;
+    pointer-events: none;
+}
+
+/* Pulsing Indicator for Active Pipeline */
+@keyframes pulse-emerald {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .4;
+    }
+}

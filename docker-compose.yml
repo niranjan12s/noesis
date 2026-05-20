@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+
+  # ── Apache Kafka (KRaft Mode) ─────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: sgms-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      CLUSTER_ID: '4L62xObTNC6A7c8abaFFww'
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── OpenSearch ────────────────────────────────────────────────────────────
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: sgms-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sgms-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: sgms-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: sgms
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d sgms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  opensearch_data:
+  redis_data:
+  pg_data:

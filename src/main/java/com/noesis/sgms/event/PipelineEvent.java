@@ -1,0 +1,16 @@
+package com.noesis.sgms.event;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PipelineEvent {
+    private String eventType;
+    private String documentId;
+    private String ingestionRunId;
+}

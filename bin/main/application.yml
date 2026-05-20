@@ -1,0 +1,112 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: noesis-sgms
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: sgms-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.noesis.sgms.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+
+  # ── PostgreSQL & JPA ──────────────────────────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sgms
+    username: user
+    password: password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+# ── SGMS Application Properties ───────────────────────────────────────────
+sgms:
+  opensearch:
+    host: localhost
+    port: 9200
+    scheme: http
+
+  llm:
+    provider: groq
+    gemini-api-key: ${GEMINI_API_KEY:}
+    base-url: http://localhost:11434
+    model: llama3.2:1b
+    embedding-model: llama3.2:1b
+    timeout-seconds: 120
+    rate-limiter:
+      enabled: true
+      max-calls-per-minute: 15
+
+  watch:
+    dir: ./neosis
+    extensions:
+      - .md
+      - .txt
+      - .xlsx
+
+  traversal:
+    max-depth: 3
+    cache-ttl-seconds: 300
+
+  chunker:
+    text-window-size: 512
+    text-window-overlap: 64
+
+# ── Actuator ──────────────────────────────────────────────────────────────
+management:
+  endpoint:
+    health:
+      show-details: always
+
+# ── Logging ───────────────────────────────────────────────────────────────
+logging:
+  file:
+    name: "logs/sgms.log"
+  level:
+    com.noesis.sgms: DEBUG
+    org.springframework.kafka: INFO
+    org.opensearch: WARN
+  # Suppress console logging to prevent corruption of the MCP stdio JSON-RPC stream
+  pattern:
+    console: ""
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
