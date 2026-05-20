@@ -3,6 +3,7 @@
 
 # Log file
 *.log
+logs/
 
 # BlueJ files
 *.ctxt
@@ -19,6 +20,38 @@
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# virtual machine crash logs
 hs_err_pid*
 replay_pid*
+
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Python
+*.pyc
+__pycache__/
+venv/
+
+# Neosis local state
+.neosis/
+
+# Generated analysis files
+assertions.md
+changes.md
+chunks.md
+nodes_and_edges.md
+opensearch-index-setup.md
+opensearch-workers.md
