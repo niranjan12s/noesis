@@ -6,7 +6,7 @@
 Chunk-based vector RAG breaks down in three major failure modes:
 
 - **Multi-hop queries** — "What services depend on the database the billing module writes to?" requires traversing connections across documents. Vector similarity has no edge model, it retrieves isolated chunks and relies on the LLM to synthesize the path.
-**Non deterministic retrieval** - Two semantically similar chunks can rank differently when embeddding model changes, chunking changes,documents are edited or the index rebuilds, making audits difficult in operational systems. Retrieval is not reproducible.
+- **Non deterministic retrieval** - Two semantically similar chunks can rank differently when embeddding model changes, chunking changes,documents are edited or the index rebuilds, making audits difficult in operational systems. Retrieval is not reproducible.
 - **Provenance Collapse** — a vector match returns a similarity score and a chunk. There is no way to trace *why* two facts are related or what document chain produced them. The retrieval layer cannot explain the traversal path that connected the result.
 
 Nosesis shifts relationship extraction from query time to ingestion time.it converts document chunks into structured assertions, then derives graoh nodes and edges from those assertions. Queries traverse  these relationships deterministically, and every result links back to the originating assertion, chunk, and section in a source document for provenance.
