@@ -1,0 +1,7 @@
+N    N   OOO   EEEEE  SSSSS  IIIII  SSSSS
+NN   N  O   O  E      S        I    S
+N N  N  O   O  EEEE   SSSS     I    SSSS
+N  N N  O   O  E          S    I       S
+N   NN   OOO   EEEEE  SSSSS  IIIII  SSSSS
+
+       :: Noesis Semantic Graph Memory System :: v1.0.0

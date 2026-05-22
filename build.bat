@@ -1,4 +1,4 @@
 @echo off
-cd /d "C:\Users\Niranjan\Documents\GitHub\neosis"
+cd /d "%~dp0"
 .\gradlew.bat bootJar -x test --no-daemon > gradle-output.log 2>&1
 exit %ERRORLEVEL%

@@ -3,19 +3,19 @@ server:
 
 spring:
   application:
-    name: noesis-sgms
+    name: noesis
 
   # ── Kafka ──────────────────────────────────────────────────────────────────
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
-      group-id: sgms-consumer-group
+      group-id: noesis-consumer-group
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.noesis.sgms.*"
+        spring.json.trusted.packages: "com.noesis.*"
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -26,7 +26,7 @@ spring:
 
   # ── PostgreSQL & JPA ──────────────────────────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/sgms
+    url: jdbc:postgresql://localhost:5432/noesis
     username: user
     password: password
     driver-class-name: org.postgresql.Driver
@@ -48,26 +48,31 @@ spring:
       port: 6379
       timeout: 2000ms
 
-# ── SGMS Application Properties ───────────────────────────────────────────
-sgms:
+# ── Noesis Application Properties ───────────────────────────────────────────
+noesis:
   opensearch:
     host: localhost
     port: 9200
     scheme: http
 
   llm:
-    provider: groq
+    provider: ${NOESIS_LLM_PROVIDER:groq}
     gemini-api-key: ${GEMINI_API_KEY:}
-    base-url: http://localhost:11434
-    model: llama3.2:1b
+    openai-api-key: ${OPENAI_API_KEY:}
+    openai-base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    base-url: ${NOESIS_LLM_BASE_URL:http://localhost:11434}
+    model: ${NOESIS_LLM_MODEL:llama-3.1-8b-instant}
     embedding-model: llama3.2:1b
     timeout-seconds: 120
     rate-limiter:
       enabled: true
       max-calls-per-minute: 15
 
+  auto-approve:
+    threshold: 0
+
   watch:
-    dir: ./neosis
+    dir: ./noesis
     extensions:
       - .md
       - .txt
@@ -81,6 +86,9 @@ sgms:
     text-window-size: 512
     text-window-overlap: 64
 
+  dedup:
+    ttl-hours: 168
+
 # ── Actuator ──────────────────────────────────────────────────────────────
 management:
   endpoint:
@@ -90,23 +98,9 @@ management:
 # ── Logging ───────────────────────────────────────────────────────────────
 logging:
   file:
-    name: "logs/sgms.log"
-  level:
-    com.noesis.sgms: DEBUG
-    org.springframework.kafka: INFO
-    org.opensearch: WARN
-  # Suppress console logging to prevent corruption of the MCP stdio JSON-RPC stream
+    name: "logs/noesis.log"
   pattern:
-    console: ""
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
----
-spring:
-  config:
-    activate:
-      on-profile: dev
 
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 

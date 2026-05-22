@@ -1,0 +1,14 @@
+package com.noesis.entity;
+
+public enum DocumentStatus {
+    DISCOVERED,
+    QUEUED,
+    PROCESSING_ASSERTIONS,
+    PROCESSING_GRAPH,
+    INDEXING_ASSERTIONS,
+    INDEXING_EDGES,
+    QUERYABLE,
+    RETRYING,
+    FAILED_RETRYABLE,
+    FAILED_FATAL
+}

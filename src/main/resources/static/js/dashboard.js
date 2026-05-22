@@ -1,4 +1,4 @@
-/* Neosis - Observability Dashboard Logic */
+/* Noesis - Observability Dashboard Logic */
 
 const { createApp } = Vue;
 
@@ -28,6 +28,21 @@ const app = createApp({
             activePredicatesList: [],
             showTimelineTable: false,
             documents: [],
+            // Toast notification
+            toast: { visible: false, message: '', type: 'info' },
+            // LLM Settings
+            llmConfig: {
+                provider: 'groq',
+                model: 'llama-3.1-8b-instant',
+                apiKey: '',
+                baseUrl: 'http://localhost:11434',
+                openaiBaseUrl: 'https://api.openai.com/v1',
+                timeoutSeconds: 120,
+                customRequestTemplate: '',
+                customResponsePath: '',
+                rateLimiter: { enabled: false, maxCallsPerMinute: 5 }
+            },
+            settingsSaved: false,
             // Bulk mode
             bulkMode: false,
             bulkJobActive: false,
@@ -35,8 +50,43 @@ const app = createApp({
             showModeModal: false,
             bulkProgress: {},
             workers: [],
-            graphGrowth: { nodesPerSec: 0, edgesPerSec: 0 }
+            graphGrowth: { nodesPerSec: 0, edgesPerSec: 0 },
+            // Auto-approve
+            autoApproveEnabled: false,
+            autoApproveThreshold: 3,
+            autoApprovedNames: [],
+            // Map modal
+            mapModal: {
+                visible: false,
+                failedName: '',
+                failedGroup: '',
+                targetName: ''
+            }
         };
+    },
+    computed: {
+        /**
+         * Groups activePredicatesList by predicateGroup.
+         * Returns an object: { GROUP_NAME: [predicate, ...], ... }
+         * The group matching the current mapModal.failedGroup is always listed first.
+         */
+        activePredicatesByGroup() {
+            const groups = {};
+            for (const p of this.activePredicatesList) {
+                const g = p.predicateGroup || 'OTHER';
+                if (!groups[g]) groups[g] = [];
+                groups[g].push(p);
+            }
+            // Sort group names: current failed group first, rest alphabetically
+            const priorityGroup = this.mapModal.failedGroup;
+            return Object.fromEntries(
+                Object.entries(groups).sort(([a], [b]) => {
+                    if (a === priorityGroup) return -1;
+                    if (b === priorityGroup) return 1;
+                    return a.localeCompare(b);
+                })
+            );
+        }
     },
     methods: {
         async fetchMetrics() {
@@ -104,6 +154,109 @@ const app = createApp({
                 }
             } catch (err) {
                 console.error("Error rejecting predicate:", err);
+            }
+        },
+        openMapModal(pred) {
+            this.mapModal.failedName = pred.name;
+            this.mapModal.failedGroup = pred.predicateGroup || '';
+            // Pre-populate with first active predicate in the same group
+            const inGroup = (this.activePredicatesList || [])
+                .filter(p => p.predicateGroup === pred.predicateGroup);
+            this.mapModal.targetName = inGroup.length > 0 ? inGroup[0].name : '';
+            this.mapModal.visible = true;
+        },
+        closeMapModal() {
+            this.mapModal.visible = false;
+            this.mapModal.failedName = '';
+            this.mapModal.failedGroup = '';
+            this.mapModal.targetName = '';
+        },
+        async submitMap() {
+            if (!this.mapModal.targetName.trim()) {
+                alert('Please select or enter a target predicate.');
+                return;
+            }
+            try {
+                const params = new URLSearchParams({
+                    failedName: this.mapModal.failedName,
+                    targetName: this.mapModal.targetName.trim().toUpperCase()
+                });
+                const res = await fetch(`/api/predicates/map?${params}`, { method: 'POST' });
+                if (res.ok) {
+                    console.log(`Mapped ${this.mapModal.failedName} → ${this.mapModal.targetName}`);
+                    this.closeMapModal();
+                    this.fetchFailedPredicates();
+                    this.fetchActivePredicates();
+                    this.fetchMetrics();
+                    if (window.explorer && typeof window.explorer.loadGraph === 'function') {
+                        window.explorer.loadGraph();
+                    }
+                } else {
+                    alert('Map failed: ' + await res.text());
+                }
+            } catch (err) {
+                console.error('Error mapping predicate:', err);
+            }
+        },
+        async revokePredicate(name) {
+            if (!confirm(`Revoke "${name}"? This will delete all edges, orphaned nodes, and assertions using this predicate.`)) return;
+            try {
+                const res = await fetch(`/api/predicates/revoke?name=${encodeURIComponent(name)}`, {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    console.log(`Revoked predicate: ${name}`);
+                    this.autoApprovedNames = this.autoApprovedNames.filter(n => n !== name);
+                    this.fetchFailedPredicates();
+                    this.fetchActivePredicates();
+                    this.fetchMetrics();
+                    if (window.explorer && typeof window.explorer.loadGraph === 'function') {
+                        window.explorer.loadGraph();
+                    }
+                } else {
+                    alert("Revoke failed: " + await res.text());
+                }
+            } catch (err) {
+                console.error("Error revoking predicate:", err);
+            }
+        },
+        isAutoApproved(name) {
+            return this.autoApprovedNames.includes(name);
+        },
+        async onAutoApproveToggle() {
+            if (this.autoApproveEnabled) {
+                await this.runAutoApprove();
+            }
+        },
+        async runAutoApprove() {
+            if (this.failedPredicates.length === 0) return;
+            try {
+                const res = await fetch('/api/predicates/auto-approve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({threshold: this.autoApproveThreshold})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`Auto-approved ${data.approvedCount} predicates`);
+                    if (data.approvedCount > 0) {
+                        // Track auto-approved names
+                        const approved = this.failedPredicates
+                            .filter(p => p.occurrenceCount >= this.autoApproveThreshold)
+                            .map(p => p.name);
+                        this.autoApprovedNames = [...new Set([...this.autoApprovedNames, ...approved])];
+                    }
+                    this.fetchFailedPredicates();
+                    this.fetchActivePredicates();
+                    this.fetchMetrics();
+                    if (window.explorer && typeof window.explorer.loadGraph === 'function') {
+                        window.explorer.loadGraph();
+                    }
+                } else {
+                    console.error("Auto-approve failed:", await res.text());
+                }
+            } catch (err) {
+                console.error("Error auto-approving predicates:", err);
             }
         },
         async selectNode(node) {
@@ -181,6 +334,49 @@ const app = createApp({
                 }
             }
             this.fetchDocuments();
+        },
+        async fetchLlmConfig() {
+            try {
+                const res = await fetch('/api/llm/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.llmConfig = {
+                        provider: data.provider || 'groq',
+                        model: data.model || 'llama-3.1-8b-instant',
+                        apiKey: data.apiKey || '',
+                        baseUrl: data.baseUrl || 'http://localhost:11434',
+                        openaiBaseUrl: data.openaiBaseUrl || 'https://api.openai.com/v1',
+                        timeoutSeconds: data.timeoutSeconds || 120,
+                        customRequestTemplate: data.customRequestTemplate || '',
+                        customResponsePath: data.customResponsePath || '',
+                        rateLimiter: {
+                            enabled: data.rateLimiter ? data.rateLimiter.enabled : false,
+                            maxCallsPerMinute: data.rateLimiter ? data.rateLimiter.maxCallsPerMinute : 5
+                        }
+                    };
+                    this.settingsSaved = false;
+                }
+            } catch (err) {
+                console.error("Failed to fetch LLM config:", err);
+            }
+        },
+        async saveLlmConfig() {
+            try {
+                const res = await fetch('/api/llm/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.llmConfig)
+                });
+                if (res.ok) {
+                    this.settingsSaved = true;
+                    setTimeout(() => this.settingsSaved = false, 3000);
+                } else {
+                    alert("Failed to save LLM config: " + await res.text());
+                }
+            } catch (err) {
+                console.error("Error saving LLM config:", err);
+                alert("Error saving LLM config");
+            }
         },
         async startBulkJob(directory) {
             const res = await fetch('/api/bulk/start', {
@@ -265,9 +461,12 @@ const app = createApp({
             setTimeout(() => wave.remove(), 800);
         },
         async uploadFiles(event) {
-            const files = Array.from(event.target.files).slice(0, 5);
+            const selected = Array.from(event.target.files);
+            if (selected.length > 5) {
+                alert("Maximum 5 files per upload. Selected " + selected.length + " — only first 5 will be uploaded.");
+            }
+            const files = selected.slice(0, 5);
             if (files.length === 0) return;
-            // Copy files to watch directory to trigger pipeline
             for (const file of files) {
                 try {
                     const formData = new FormData();
@@ -277,6 +476,7 @@ const app = createApp({
                     console.error("Upload failed:", file.name, e);
                 }
             }
+            event.target.value = null;
             this.fetchDocuments();
         },
         formatETA(seconds) {
@@ -345,6 +545,13 @@ const app = createApp({
                 console.error('Chart render failed:', e);
             }
         },
+        showToast(message, type = 'info', duration = 4000) {
+            this.toast.message = message;
+            this.toast.type = type;
+            this.toast.visible = true;
+            clearTimeout(this.toast._timer);
+            this.toast._timer = setTimeout(() => this.toast.visible = false, duration);
+        },
         async fetchDocuments() {
             try {
                 const res = await fetch('/api/documents');
@@ -360,12 +567,31 @@ const app = createApp({
             try {
                 const res = await fetch(`/api/documents/${id}/delete`, { method: 'POST' });
                 if (res.ok) {
+                    this.showToast(`"${name}" marked for deletion`, 'success');
                     this.fetchDocuments();
                 } else {
-                    alert("Failed: " + await res.text());
+                    const errMsg = await res.text();
+                    this.showToast(`Delete failed: ${errMsg}`, 'error');
                 }
             } catch (err) {
+                this.showToast(`Delete error: ${err.message}`, 'error');
                 console.error("Error marking document for deletion:", err);
+            }
+        },
+        async hardDeleteDocument(id, name) {
+            if (!confirm(`Permanently delete "${name}" NOW? This cannot be undone.`)) return;
+            try {
+                const res = await fetch(`/api/documents/${id}/hard-delete`, { method: 'POST' });
+                if (res.ok) {
+                    this.showToast(`"${name}" permanently deleted`, 'success');
+                    this.fetchDocuments();
+                } else {
+                    const errMsg = await res.text();
+                    this.showToast(`Hard delete failed: ${errMsg}`, 'error');
+                }
+            } catch (err) {
+                this.showToast(`Hard delete error: ${err.message}`, 'error');
+                console.error("Error hard-deleting document:", err);
             }
         },
         async restoreDocument(id, name) {
@@ -373,11 +599,14 @@ const app = createApp({
             try {
                 const res = await fetch(`/api/documents/${id}/restore`, { method: 'POST' });
                 if (res.ok) {
+                    this.showToast(`"${name}" restored`, 'success');
                     this.fetchDocuments();
                 } else {
-                    alert("Failed: " + await res.text());
+                    const errMsg = await res.text();
+                    this.showToast(`Restore failed: ${errMsg}`, 'error');
                 }
             } catch (err) {
+                this.showToast(`Restore error: ${err.message}`, 'error');
                 console.error("Error restoring document:", err);
             }
         },
@@ -404,7 +633,7 @@ const app = createApp({
             return `Deleting in ${m}:${s.toString().padStart(2, '0')}`;
         },
         classifyPredicate(name) {
-            if (!name) return 'BUSINESS_RULES';
+            if (typeof name !== 'string' || !name) return 'BUSINESS_RULES';
             const upper = name.toUpperCase();
             if (upper.includes("WRITE") || upper.includes("SAVE") || upper.includes("STORE") ||
                 upper.includes("PERSIST") || upper.includes("DELETE") || upper.includes("REMOVE") ||
@@ -457,7 +686,7 @@ const app = createApp({
         },
         getActivePredicatesInGroup(group) {
             if (!this.activePredicatesList) return [];
-            return this.activePredicatesList.filter(name => this.classifyPredicate(name) === group);
+            return this.activePredicatesList.filter(p => this.classifyPredicate(p && p.name ? p.name : '') === group);
         },
         getFriendlyGroupName(group) {
             if (!group) return 'Business Rules';
@@ -495,12 +724,24 @@ const app = createApp({
         this.fetchActivePredicates();
         this.fetchMode();
 
-        // Start real-time polling every 3 seconds
-        setInterval(() => {
-            this.fetchMetrics();
-            this.fetchFailedPredicates();
-            if (this.bulkMode && this.bulkJobActive) this.fetchWorkers();
-        }, 3000);
+        // SSE stream for live metrics (replaces 3s polling)
+        this.metricsEventSource = new EventSource('/api/dashboard/stream');
+        this.metricsEventSource.addEventListener('metrics', (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                this.metrics = data;
+                this.recentEvents = data.recentEvents || [];
+                this.renderChart(data.throughputHistory || []);
+            } catch (e) {
+                console.error("SSE metrics parse error:", e);
+            }
+        });
+        this.metricsEventSource.onerror = () => {
+            console.debug("Metrics SSE disconnected, will auto-reconnect");
+        };
+    },
+    beforeUnmount() {
+        if (this.metricsEventSource) this.metricsEventSource.close();
     },
     computed: {
         bulkProgressPercent() {
@@ -508,6 +749,9 @@ const app = createApp({
             const p = this.bulkProgress.filesProcessed || 0;
             if (d === 0) return 0;
             return Math.min(100, Math.round((p / d) * 100));
+        },
+        autoApprovedCount() {
+            return this.autoApprovedNames.length;
         }
     }
 });

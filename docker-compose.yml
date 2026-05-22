@@ -5,7 +5,7 @@ services:
   # ── Apache Kafka (KRaft Mode) ─────────────────────────────────────────────
   kafka:
     image: confluentinc/cp-kafka:7.6.0
-    container_name: sgms-kafka
+    container_name: noesis-kafka
     ports:
       - "9092:9092"
     environment:
@@ -30,7 +30,7 @@ services:
   # ── OpenSearch ────────────────────────────────────────────────────────────
   opensearch:
     image: opensearchproject/opensearch:2.13.0
-    container_name: sgms-opensearch
+    container_name: noesis-opensearch
     environment:
       - discovery.type=single-node
       - DISABLE_SECURITY_PLUGIN=true
@@ -44,7 +44,7 @@ services:
       - "9200:9200"
       - "9600:9600"
     volumes:
-      - opensearch_data:/usr/share/opensearch/data
+      - noesis_opensearch_data:/usr/share/opensearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 20s
@@ -54,12 +54,12 @@ services:
   # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: sgms-redis
+    container_name: noesis-redis
     ports:
       - "6379:6379"
     command: redis-server --save 60 1 --loglevel warning
     volumes:
-      - redis_data:/data
+      - noesis_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -69,22 +69,22 @@ services:
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
-    container_name: sgms-postgres
+    container_name: noesis-postgres
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: sgms
+      POSTGRES_DB: noesis
     ports:
       - "5432:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - noesis_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d sgms"]
+      test: ["CMD-SHELL", "pg_isready -U user -d noesis"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
-  opensearch_data:
-  redis_data:
-  pg_data:
+  noesis_opensearch_data:
+  noesis_redis_data:
+  noesis_pg_data:

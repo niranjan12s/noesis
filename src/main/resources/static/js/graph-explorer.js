@@ -1,4 +1,4 @@
-/* Neosis - D3.js Knowledge Graph Canvas Explorer */
+/* Noesis - D3.js Knowledge Graph Canvas Explorer */
 
 class GraphExplorer {
     constructor() {
@@ -9,6 +9,10 @@ class GraphExplorer {
         this.simulation = null;
         this.nodes = [];
         this.links = [];
+
+        this.expansionLevel = 1;
+        this.selectedNodeId = null;
+        this.levelControl = null;
         
         this.init();
     }
@@ -17,6 +21,12 @@ class GraphExplorer {
         const svgElement = document.getElementById("graph-svg");
         if (!svgElement) return;
 
+        // Verify D3 found the SVG element in its selection
+        if (!this.svg.node()) {
+            console.warn("GraphExplorer: SVG element not found in D3 selection");
+            return;
+        }
+
         // Create main graphics container group for zooming
         this.g = this.svg.append("g");
 
@@ -24,7 +34,10 @@ class GraphExplorer {
         this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on("zoom", (event) => {
-                this.g.attr("transform", event.transform);
+                const t = event.transform;
+                if (t && isFinite(t.x) && isFinite(t.y) && isFinite(t.k)) {
+                    this.g.attr("transform", t);
+                }
             });
         
         this.svg.call(this.zoom);
@@ -32,6 +45,7 @@ class GraphExplorer {
         // Click canvas to clear active inspector selection
         this.svg.on("click", (event) => {
             if (event.target.tagName === 'svg') {
+                this.clearLevelExpansion();
                 if (window.vueApp) {
                     window.vueApp.closeInspector();
                 }
@@ -42,7 +56,7 @@ class GraphExplorer {
         this.svg.append("defs").append("marker")
             .attr("id", "arrow")
             .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 18) // position offset from node circle
+            .attr("refX", 18)
             .attr("refY", 0)
             .attr("markerWidth", 6)
             .attr("markerHeight", 6)
@@ -51,7 +65,130 @@ class GraphExplorer {
             .attr("d", "M0,-5L10,0L0,5")
             .attr("fill", "rgba(255, 255, 255, 0.3)");
 
+        this.createLevelControl();
         this.loadGraph();
+    }
+
+    createLevelControl() {
+        const container = document.getElementById("canvas-container");
+        if (!container) return;
+
+        this.levelControl = document.createElement("div");
+        this.levelControl.id = "graph-level-control";
+        this.levelControl.style.cssText = "position:absolute;bottom:24px;right:24px;display:flex;align-items:center;gap:8px;background:rgba(11,12,16,0.85);border:1px solid #45a29e;border-radius:6px;padding:8px 14px;z-index:100;";
+
+        const label = document.createElement("span");
+        label.textContent = "Level";
+        label.style.cssText = "color:#c5c6c7;font-size:12px;text-transform:uppercase;letter-spacing:1px;";
+
+        const minus = document.createElement("button");
+        minus.textContent = "\u2212";
+        minus.style.cssText = "background:transparent;border:1px solid #45a29e;color:#45a29e;border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;";
+        minus.addEventListener("click", () => this.changeLevel(-1));
+
+        const value = document.createElement("span");
+        value.id = "graph-level-value";
+        value.textContent = "1";
+        value.style.cssText = "color:#66fcf1;font-size:16px;font-weight:bold;min-width:20px;text-align:center;";
+
+        const plus = document.createElement("button");
+        plus.textContent = "+";
+        plus.style.cssText = "background:transparent;border:1px solid #45a29e;color:#45a29e;border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;";
+        plus.addEventListener("click", () => this.changeLevel(1));
+
+        this.levelControl.appendChild(label);
+        this.levelControl.appendChild(minus);
+        this.levelControl.appendChild(value);
+        this.levelControl.appendChild(plus);
+        container.appendChild(this.levelControl);
+    }
+
+    changeLevel(direction) {
+        if (!this.selectedNodeId) return;
+        const newLevel = Math.max(1, Math.min(10, this.expansionLevel + direction));
+        if (newLevel === this.expansionLevel) return;
+        this.expansionLevel = newLevel;
+        const valueEl = document.getElementById("graph-level-value");
+        if (valueEl) valueEl.textContent = newLevel;
+        this.expandToLevel(this.selectedNodeId, this.expansionLevel);
+    }
+
+    expandToLevel(rootNodeId, level) {
+        this.clearSelection();
+        console.log("expandToLevel called", { rootNodeId, level, totalNodes: this.nodes.length, totalLinks: this.links.length });
+
+        // Build adjacency list from current links
+        const adj = new Map();
+        const resolveId = (x) => (x && x.id) || x;
+        this.links.forEach(link => {
+            const src = resolveId(link.source);
+            const tgt = resolveId(link.target);
+            if (!src || !tgt) return;
+            if (!adj.has(src)) adj.set(src, []);
+            if (!adj.has(tgt)) adj.set(tgt, []);
+            adj.get(src).push(tgt);
+            adj.get(tgt).push(src);
+        });
+
+        const visited = new Set();
+        let currentLevel = [rootNodeId];
+        const levelNodes = new Set([rootNodeId]);
+        visited.add(rootNodeId);
+
+        for (let l = 0; l < level; l++) {
+            const nextLevel = [];
+            for (const nodeId of currentLevel) {
+                const neighbors = adj.get(nodeId) || [];
+                for (const nid of neighbors) {
+                    if (!visited.has(nid)) {
+                        visited.add(nid);
+                        levelNodes.add(nid);
+                        nextLevel.push(nid);
+                    }
+                }
+            }
+            currentLevel = nextLevel;
+            console.log("expandToLevel iteration", { l, foundAtThisLevel: nextLevel.length });
+        }
+
+        console.log("expandToLevel result", { nodeCount: levelNodes.size });
+
+        d3.select(`#node-${rootNodeId}`).classed("highlighted", true);
+
+        this.g.selectAll(".link").each(function(l) {
+            const sourceId = resolveId(l.source);
+            const targetId = resolveId(l.target);
+            if (levelNodes.has(sourceId) && levelNodes.has(targetId)) {
+                d3.select(this).classed("highlighted", true);
+            }
+        });
+
+        this.g.selectAll(".node").style("opacity", d => levelNodes.has(d.id) ? 1.0 : 0.2);
+        this.g.selectAll(".link").style("opacity", function(l) {
+            const sourceId = resolveId(l.source);
+            const targetId = resolveId(l.target);
+            return (levelNodes.has(sourceId) && levelNodes.has(targetId)) ? 1.0 : 0.12;
+        });
+        this.g.selectAll(".edge-label").style("opacity", function(l) {
+            const sourceId = resolveId(l.source);
+            const targetId = resolveId(l.target);
+            return (levelNodes.has(sourceId) && levelNodes.has(targetId)) ? 1.0 : 0.08;
+        });
+        this.g.selectAll(".node-label").style("opacity", d => levelNodes.has(d.id) ? 1.0 : 0.15);
+    }
+
+    clearLevelExpansion() {
+        this.selectedNodeId = null;
+        this.expansionLevel = 1;
+        const valueEl = document.getElementById("graph-level-value");
+        if (valueEl) valueEl.textContent = "1";
+        this.clearSelection();
+        this.g.selectAll(".node").style("opacity", 1.0);
+        this.g.selectAll(".link").style("opacity", 1.0);
+        this.g.selectAll(".edge-label").style("opacity", 1.0);
+        this.g.selectAll(".node-label").style("opacity", 1.0);
+        this.g.selectAll(".node").classed("highlighted", false);
+        this.g.selectAll(".link").classed("highlighted", false);
     }
 
     async loadGraph() {
@@ -134,7 +271,11 @@ class GraphExplorer {
             .call(this.drag(this.simulation))
             .on("click", (event, d) => {
                 event.stopPropagation();
-                this.highlightNeighborhood(d.id);
+                this.selectedNodeId = d.id;
+                this.expansionLevel = 1;
+                const valueEl = document.getElementById("graph-level-value");
+                if (valueEl) valueEl.textContent = "1";
+                this.expandToLevel(d.id, 1);
                 if (window.vueApp) {
                     window.vueApp.selectNode(d);
                 }
@@ -153,22 +294,22 @@ class GraphExplorer {
         // Update coordinates on simulation tick
         this.simulation.on("tick", () => {
             link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
+                .attr("x1", d => d.source ? d.source.x : 0)
+                .attr("y1", d => d.source ? d.source.y : 0)
+                .attr("x2", d => d.target ? d.target.x : 0)
+                .attr("y2", d => d.target ? d.target.y : 0);
 
             linkLabel
-                .attr("x", d => (d.source.x + d.target.x) / 2)
-                .attr("y", d => (d.source.y + d.target.y) / 2 - 4);
+                .attr("x", d => d.source && d.target ? (d.source.x + d.target.x) / 2 : 0)
+                .attr("y", d => d.source && d.target ? (d.source.y + d.target.y) / 2 - 4 : 0);
 
             node
-                .attr("cx", d => d.x)
-                .attr("cy", d => d.y);
+                .attr("cx", d => d.x || 0)
+                .attr("cy", d => d.y || 0);
 
             label
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
+                .attr("x", d => d.x || 0)
+                .attr("y", d => d.y || 0);
         });
 
         // Center on render completion
@@ -265,8 +406,9 @@ class GraphExplorer {
 
     renderBulkOnly() {
         if (!this.g) return;
+        const bulkLinks = this.links.filter(l => l.isBulkPlaceholder);
         const link = this.g.selectAll(".bulk-link").data(
-            this.links.filter(l => l.isBulkPlaceholder), d => d.source.id + '-' + d.target.id
+            bulkLinks, d => (d.source && d.source.id || '') + '-' + (d.target && d.target.id || '')
         );
         link.enter().append("line")
             .attr("class", "bulk-link")
@@ -274,14 +416,15 @@ class GraphExplorer {
             .attr("stroke-width", 1)
             .attr("stroke-opacity", 0.3)
             .merge(link)
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
+            .attr("x1", d => d.source ? d.source.x || 0 : 0)
+            .attr("y1", d => d.source ? d.source.y || 0 : 0)
+            .attr("x2", d => d.target ? d.target.x || 0 : 0)
+            .attr("y2", d => d.target ? d.target.y || 0 : 0);
         link.exit().remove();
 
+        const bulkNodes = this.nodes.filter(n => n.isBulkPlaceholder);
         const node = this.g.selectAll(".bulk-node").data(
-            this.nodes.filter(n => n.isBulkPlaceholder), d => d.id
+            bulkNodes, d => d.id
         );
         node.enter().append("circle")
             .attr("class", "bulk-node")
@@ -289,21 +432,22 @@ class GraphExplorer {
             .attr("fill", "#66fcf1")
             .attr("opacity", 0.4)
             .merge(node)
-            .attr("cx", d => d.x)
-            .attr("cy", d => d.y);
+            .attr("cx", d => d.x || 0)
+            .attr("cy", d => d.y || 0);
         node.exit().remove();
     }
 
     resetZoom() {
         const svgElement = document.getElementById("graph-svg");
-        if (!svgElement) return;
+        if (!svgElement || !this.svg.node() || !this.zoom) return;
 
-        const width = svgElement.clientWidth || 800;
-        const height = svgElement.clientHeight || 600;
+        const width = svgElement.clientWidth;
+        const height = svgElement.clientHeight;
+        if (!width || !height) return;
 
         this.svg.transition().duration(750).call(
             this.zoom.transform,
-            d3.zoomIdentity.translate(0, 0).scale(1)
+            d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
         );
     }
 

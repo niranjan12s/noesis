@@ -1,0 +1,19 @@
+# Test profile — overrides services that aren't available in CI/headless
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+    listener:
+      auto-startup: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 500ms
+
+# Disable the Kafka outbox listener so tests don't hang on missing broker
+noesis:
+  outbox:
+    enabled: false

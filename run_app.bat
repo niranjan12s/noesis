@@ -1,3 +1,3 @@
 @echo off
-cd /d "C:\Users\Niranjan\Documents\GitHub\neosis"
+cd /d "%~dp0"
 .\gradlew.bat bootRun > logs\stdout.log 2>&1

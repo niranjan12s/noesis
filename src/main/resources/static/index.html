@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neosis - Observability Platform & Graph Explorer</title>
+    <title>Noesis - Observability Platform & Graph Explorer</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,6 +30,12 @@
         .bulk-progress-bar {
             transition: width 0.5s ease-in-out;
         }
+        #graph-level-control button:hover {
+            background: rgba(69, 162, 158, 0.2);
+        }
+        #graph-level-control button:active {
+            background: rgba(69, 162, 158, 0.4);
+        }
     </style>
     <!-- Vue 3 Global CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -48,9 +54,8 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                        NEOSIS
+                        NOESIS
                     </h1>
-                    <p class="text-xs text-gray-400">Semantic Graph Memory System</p>
                 </div>
             </div>
 
@@ -65,22 +70,18 @@
                 <button @click="currentTab = 'documents'; fetchDocuments()" :class="currentTab === 'documents' ? 'bg-[#66fcf1] text-[#0b0c10] font-semibold' : 'text-gray-300 hover:text-white hover:bg-white/5'" class="px-5 py-2 rounded-lg text-sm transition-all duration-300">
                     Documents
                 </button>
+                <button @click="currentTab = 'settings'; fetchLlmConfig()" :class="currentTab === 'settings' ? 'bg-[#66fcf1] text-[#0b0c10] font-semibold' : 'text-gray-300 hover:text-white hover:bg-white/5'" class="px-5 py-2 rounded-lg text-sm transition-all duration-300">
+                    Settings
+                </button>
             </div>
 
-            <!-- Mode Toggle + Status -->
+            <!-- Mode Toggle -->
             <div class="flex items-center gap-4 text-sm">
                 <div class="relative">
                     <button @click="toggleMode" class="relative px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-500 flex items-center gap-2" :class="bulkMode ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300' : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'">
                         <span class="w-2 h-2 rounded-full" :class="bulkMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'"></span>
                         {{ bulkMode ? 'BULK' : 'REALTIME' }}
                     </button>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="flex h-3.5 w-3.5 relative">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
-                    </span>
-                    <span class="text-gray-300 font-medium">Pipeline Active</span>
                 </div>
             </div>
         </header>
@@ -136,7 +137,7 @@
                     <div class="mb-4">
                         <div class="flex justify-between text-xs text-gray-400 mb-1">
                             <span>Progress</span>
-                            <span>{{ bulkProgress.etaSeconds > 0 ? formatETA(bulkProgress.etaSeconds) : 'Calculating...' }}</span>
+                            <span>{{ bulkProgress.etaSeconds > 0 ? formatETA(bulkProgress.etaSeconds) : (bulkProgress.filesProcessed > 0 ? 'Finalizing...' : '—') }}</span>
                         </div>
                         <div class="w-full bg-white/5 rounded-full h-3 overflow-hidden">
                             <div class="bulk-progress-bar h-full rounded-full bg-gradient-to-r from-amber-500 to-emerald-500" :style="{ width: bulkProgressPercent + '%' }"></div>
@@ -242,7 +243,7 @@
                             <h3 class="text-3xl font-bold text-white mt-2">{{ metrics.averageLatencyMs != null ? formatDecimal(metrics.averageLatencyMs) + ' ms' : '-' }}</h3>
                         </div>
                         <p class="text-xs text-gray-400 mt-4 border-t border-white/5 pt-2 flex justify-between">
-                            <span>Estimated LLM Tokens:</span>
+                            <span>Total Chunk Tokens (GPT-4o-mini):</span>
                             <span class="font-semibold text-white">{{ metrics.estimatedTokens || 0 }}</span>
                         </p>
                     </div>
@@ -257,9 +258,30 @@
                             </h2>
                             <p class="text-xs text-gray-400 mt-1">Review and approve LLM-extracted predicates not in the active registry.</p>
                         </div>
-                        <div class="px-3 py-1 rounded bg-[#66fcf1]/10 border border-[#66fcf1]/20 text-xs font-semibold text-[#66fcf1]">
-                            {{ failedPredicates.length }} Candidates Awaiting
+                        <div class="flex items-center gap-3">
+                            <span v-if="autoApprovedCount > 0" class="px-3 py-1 rounded bg-teal-500/10 border border-teal-500/20 text-xs font-semibold text-teal-400">
+                                {{ autoApprovedCount }} Auto-Approved
+                            </span>
+                            <div class="px-3 py-1 rounded bg-[#66fcf1]/10 border border-[#66fcf1]/20 text-xs font-semibold text-[#66fcf1]">
+                                {{ failedPredicates.length }} Candidates
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Auto-Approve Toggle -->
+                    <div class="flex items-center gap-4 mb-4 p-3 rounded-xl bg-white/5 border border-white/10">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" v-model="autoApproveEnabled" @change="onAutoApproveToggle" class="w-4 h-4 rounded bg-white/10 border-white/20 text-teal-500 focus:ring-teal-500/50">
+                            <span class="text-xs font-semibold text-gray-300">Auto-Approve</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">Threshold:</span>
+                            <input type="number" v-model.number="autoApproveThreshold" min="1" max="100" class="w-16 px-2 py-1 rounded bg-white/10 border border-white/20 text-white text-xs text-center focus:outline-none focus:border-teal-500/50">
+                            <span class="text-xs text-gray-500">occurrences</span>
+                        </div>
+                        <button v-if="autoApproveEnabled && failedPredicates.length > 0" @click="runAutoApprove" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-500 text-white shadow-lg shadow-teal-500/20 hover:bg-teal-600 transition-all">
+                            Apply Now
+                        </button>
                     </div>
 
                     <!-- Table of Curation -->
@@ -293,10 +315,10 @@
                                                 Before approving <strong class="text-white">{{ pred.name }}</strong>, check if an active predicate in the <span class="text-purple-400 font-semibold">{{ getFriendlyGroupName(pred.predicateGroup) }}</span> group fits your needs to keep the ontology clean:
                                             </p>
                                             <div class="flex flex-wrap gap-1.5 mt-2">
-                                                <span v-for="activeName in getActivePredicatesInGroup(pred.predicateGroup).slice(0, 8)" 
-                                                      :key="activeName" 
+                                                <span v-for="activePred in getActivePredicatesInGroup(pred.predicateGroup).slice(0, 8)" 
+                                                      :key="activePred.name"
                                                       class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px] text-gray-300">
-                                                    {{ activeName }}
+                                                    {{ activePred.name }}
                                                 </span>
                                                 <span v-if="getActivePredicatesInGroup(pred.predicateGroup).length > 8" class="text-gray-500 font-mono text-[9px] self-center">
                                                     +{{ getActivePredicatesInGroup(pred.predicateGroup).length - 8 }} more
@@ -325,12 +347,22 @@
                                     </td>
                                     <td class="px-6 py-4 text-right">
                                         <div class="inline-flex gap-2">
-                                            <button @click="approvePredicate(pred.name)" class="btn-approve px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all">
-                                                Approve
-                                            </button>
-                                            <button @click="rejectPredicate(pred.name)" class="btn-reject px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:bg-rose-500 hover:text-white transition-all">
-                                                Reject
-                                            </button>
+                                            <template v-if="isAutoApproved(pred.name)">
+                                                <button @click="revokePredicate(pred.name)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:bg-rose-500 hover:text-white transition-all">
+                                                    Revoke
+                                                </button>
+                                            </template>
+                                            <template v-else>
+                                                <button @click="approvePredicate(pred.name)" class="btn-approve px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all">
+                                                    Approve
+                                                </button>
+                                                <button @click="openMapModal(pred)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500 hover:text-white transition-all" title="Map to an existing predicate">
+                                                    Map &rarr;
+                                                </button>
+                                                <button @click="rejectPredicate(pred.name)" class="btn-reject px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:bg-rose-500 hover:text-white transition-all">
+                                                    Reject
+                                                </button>
+                                            </template>
                                         </div>
                                     </td>
                                 </tr>
@@ -345,7 +377,99 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Recently Auto-Approved -->
+                    <div v-if="autoApprovedNames.length > 0" class="mt-4 p-4 rounded-xl bg-teal-500/5 border border-teal-500/20">
+                        <h4 class="text-xs font-bold text-teal-400 uppercase tracking-wider mb-2">Recently Auto-Approved ({{ autoApprovedNames.length }})</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <span v-for="name in autoApprovedNames" :key="name" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-mono">
+                                {{ name }}
+                                <button @click="revokePredicate(name)" class="text-rose-400 hover:text-rose-300 text-[10px] font-bold ml-1" title="Revoke this predicate">&times;</button>
+                            </span>
+                        </div>
+                    </div>
                 </section>
+
+                <!-- ── Map Predicate Modal ──────────────────────────────────────────── -->
+                <teleport to="body">
+                    <div v-if="mapModal.visible"
+                         class="fixed inset-0 z-50 flex items-center justify-center bg-black/75"
+                         @click.self="closeMapModal">
+                        <div class="glass rounded-2xl border border-white/10 shadow-2xl p-8 w-full max-w-lg mx-4">
+
+                            <!-- Header -->
+                            <div class="flex items-start justify-between mb-6">
+                                <div>
+                                    <h3 class="text-lg font-bold text-white">Map Predicate</h3>
+                                    <p class="text-sm text-gray-400 mt-1">
+                                        Remap
+                                        <span class="font-mono font-bold text-[#66fcf1]">{{ mapModal.failedName }}</span>
+                                        to an existing or new active predicate.
+                                    </p>
+                                </div>
+                                <button @click="closeMapModal" class="text-gray-500 hover:text-white text-xl leading-none ml-4">&times;</button>
+                            </div>
+
+                            <!-- Group badge -->
+                            <div class="mb-4 flex items-center gap-2">
+                                <span class="text-xs text-gray-500 uppercase tracking-wider">Group</span>
+                                <span :class="getGroupBadgeClass(mapModal.failedGroup)" class="px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide border">
+                                    {{ getFriendlyGroupName(mapModal.failedGroup) }}
+                                </span>
+                            </div>
+
+                            <!-- Dropdown grouped by category -->
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Select Existing Predicate</label>
+                            <select v-model="mapModal.targetName"
+                                    class="w-full px-3 py-2 rounded-xl bg-[#1e1f2b] border border-white/10 text-white text-sm focus:outline-none focus:border-indigo-400/50 mb-4">
+                                <optgroup v-for="(preds, group) in activePredicatesByGroup" :key="group" :label="getFriendlyGroupName(group)">
+                                    <option v-for="p in preds" :key="p.name" :value="p.name" style="background: #1e1f2b; color: #fff;">{{ p.name }}</option>
+                                </optgroup>
+                            </select>
+
+                            <!-- Or enter a new canonical name -->
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Or Enter a New Canonical Name</label>
+                            <input v-model="mapModal.targetName"
+                                   type="text"
+                                   placeholder="e.g. DELIVERS_TO"
+                                   class="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-mono focus:outline-none focus:border-indigo-400/50 mb-6" />
+
+                            <!-- Note -->
+                            <p class="text-[11px] text-gray-500 mb-6 leading-relaxed">
+                                This mapping will be remembered. Future documents containing
+                                <span class="font-mono text-gray-400">{{ mapModal.failedName }}</span>
+                                will resolve silently to
+                                <span class="font-mono text-indigo-300">{{ mapModal.targetName || '…' }}</span>
+                                via the Redis alias cache — no DB hit on the ingestion path.
+                            </p>
+
+                            <!-- Actions -->
+                            <div class="flex justify-end gap-3">
+                                <button @click="closeMapModal"
+                                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all">
+                                    Cancel
+                                </button>
+                                <button @click="submitMap"
+                                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-600 transition-all">
+                                    Map &amp; Reprocess
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </teleport>
+
+                <!-- Toast notification -->
+                <teleport to="body">
+                    <div v-if="toast.visible"
+                         class="fixed top-6 right-6 z-[200] px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold transition-all duration-300"
+                         :class="toast.type === 'error' ? 'bg-rose-600 text-white border border-rose-400/30' : toast.type === 'success' ? 'bg-emerald-600 text-white border border-emerald-400/30' : 'bg-[#1e1f2b] text-gray-200 border border-white/10'"
+                         style="min-width: 280px;">
+                        <div class="flex items-center justify-between gap-4">
+                            <span>{{ toast.message }}</span>
+                            <button @click="toast.visible = false" class="text-white/60 hover:text-white text-lg leading-none">&times;</button>
+                        </div>
+                    </div>
+                </teleport>
 
                 <!-- Row 3: Event Logs stream + Latency Chart -->
                 <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -540,7 +664,7 @@
                             <div v-if="!bulkMode || !bulkJobActive">
                                 <input type="file" multiple accept=".md,.txt" @change="uploadFiles" ref="fileInput" class="hidden">
                                 <button @click="$refs.fileInput.click()" class="px-4 py-2 rounded-xl bg-[#66fcf1]/10 border border-[#66fcf1]/30 text-[#66fcf1] text-xs font-bold hover:bg-[#66fcf1]/20 transition-all">
-                                    Upload Files (Max 5)
+                                    Upload Files (5 at a time)
                                 </button>
                             </div>
                             <span v-if="bulkMode && bulkJobActive" class="text-xs text-amber-400 font-semibold border border-amber-500/30 px-3 py-1.5 rounded-xl bg-amber-500/10">
@@ -577,6 +701,9 @@
                                         <button v-else-if="!bulkMode || !bulkJobActive" @click="deleteDocument(doc.id, doc.name)" class="px-3 py-1.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold hover:bg-rose-500/20 transition-all">
                                             Delete
                                         </button>
+                                        <button v-if="!doc.markedForDeletionAt && doc.status !== 'QUERYABLE' && doc.status !== 'FAILED_FATAL'" @click="hardDeleteDocument(doc.id, doc.name)" class="ml-2 px-3 py-1.5 rounded bg-red-600/20 border border-red-500/40 text-red-400 text-xs font-semibold hover:bg-red-600/30 transition-all" title="Force delete (bypasses recovery)">
+                                            Force Delete
+                                        </button>
                                     </td>
                                 </tr>
                                 <tr v-if="documents.length === 0">
@@ -588,10 +715,78 @@
                 </section>
             </div>
 
+            <!-- TAB 4: SETTINGS -->
+            <div v-show="currentTab === 'settings'" class="space-y-8">
+                <section class="glass rounded-2xl p-6 border border-white/10 shadow-xl">
+                    <h2 class="text-lg font-bold text-white mb-6">LLM Settings</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Provider</label>
+                            <select v-model="llmConfig.provider" class="w-full px-3 py-2.5 rounded-xl bg-[#1e1f2b] border border-white/10 text-white text-sm focus:outline-none focus:border-[#66fcf1]/50">
+                                <option value="groq" class="bg-[#1e1f2b] text-white">Groq</option>
+                                <option value="custom" class="bg-[#1e1f2b] text-white">Custom OpenAI-compatible</option>
+                                <option value="gemini" class="bg-[#1e1f2b] text-white">Gemini</option>
+                                <option value="ollama" class="bg-[#1e1f2b] text-white">Ollama (Local)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Model</label>
+                            <input v-model="llmConfig.model" type="text" placeholder="e.g. llama-3.1-8b-instant" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">API Key</label>
+                            <input v-model="llmConfig.apiKey" type="password" placeholder="Your API key" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Base URL (Ollama / Custom)</label>
+                            <input v-model="llmConfig.baseUrl" type="text" placeholder="http://localhost:11434" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">OpenAI-compatible Base URL</label>
+                            <input v-model="llmConfig.openaiBaseUrl" type="text" placeholder="https://api.openai.com/v1" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+
+                        <!-- Custom provider: request template + response path -->
+                        <div v-if="llmConfig.provider === 'custom'" class="md:col-span-2">
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Custom Request Template (JSON with {{model}}, {{prompt}})</label>
+                            <textarea v-model="llmConfig.customRequestTemplate" rows="4" placeholder='{"model":"{{model}}","messages":[{"role":"user","content":"{{prompt}}"}]}' class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-mono placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50"></textarea>
+                        </div>
+                        <div v-if="llmConfig.provider === 'custom'">
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Custom Response JSON Path</label>
+                            <input v-model="llmConfig.customResponsePath" type="text" placeholder="e.g. choices[0].message.content or candidates[0].content.parts[0].text" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-mono placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Timeout (seconds)</label>
+                            <input v-model.number="llmConfig.timeoutSeconds" type="number" min="10" max="600" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+                    </div>
+
+                    <h3 class="text-base font-bold text-white mt-8 mb-4">Rate Limiter</h3>
+                    <div class="flex items-center gap-6">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" v-model="llmConfig.rateLimiter.enabled" class="w-4 h-4 rounded bg-white/10 border-white/20 text-[#66fcf1] focus:ring-[#66fcf1]/50">
+                            <span class="text-sm text-gray-300">Enabled</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">Max calls / minute:</span>
+                            <input v-model.number="llmConfig.rateLimiter.maxCallsPerMinute" type="number" min="1" max="1000" class="w-20 px-2 py-1.5 rounded bg-white/10 border border-white/20 text-white text-sm text-center focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 mt-8">
+                        <button @click="saveLlmConfig" class="px-6 py-2.5 rounded-xl bg-[#66fcf1] text-[#0b0c10] text-sm font-bold hover:bg-[#45a29e] transition-all shadow-lg shadow-[#66fcf1]/20">
+                            Save Settings
+                        </button>
+                        <span v-if="settingsSaved" class="self-center text-emerald-400 text-sm font-semibold">Saved successfully</span>
+                    </div>
+                </section>
+            </div>
+
         <!-- Footer -->
         <footer class="glass border-t border-white/5 px-8 py-4 flex justify-between items-center text-xs text-gray-500 mt-auto shadow-2xl backdrop-blur-md">
             <div>
-                &copy; 2026 Neosis Platform. AGPL-3.0 License.
+                &copy; 2026 Noesis Platform. AGPL-3.0 License.
             </div>
             <div>
                 System Stack: PostgreSQL &bull; Redis &bull; OpenSearch &bull; Kafka &bull; D3.js &bull; Vue 3
@@ -600,7 +795,7 @@
     </div>
 
     <!-- Static JS assets loaded sequentially -->
-    <script src="js/dashboard.js?v=1.0.2"></script>
-    <script src="js/graph-explorer.js?v=1.0.2"></script>
+    <script src="js/dashboard.js?v=1.2.0"></script>
+    <script src="js/graph-explorer.js?v=1.2.0"></script>
 </body>
 </html>

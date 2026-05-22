@@ -45,8 +45,8 @@ Thumbs.db
 __pycache__/
 venv/
 
-# Neosis local state
-.neosis/
+# Noesis local state
+.noesis/
 
 # Generated analysis files
 assertions.md
@@ -55,3 +55,7 @@ chunks.md
 nodes_and_edges.md
 opensearch-index-setup.md
 opensearch-workers.md
+
+# Scratch directory
+scratch/
+

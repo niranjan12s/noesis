@@ -1,515 +1,168 @@
-# Neosis — Semantic Graph Memory System
+# Noesis
 
-Neosis ingests Markdown documentation, extracts semantic assertions via an LLM, builds a deduplicated knowledge graph in PostgreSQL, indexes it in OpenSearch, and exposes a query API for graph traversal — plus a real-time dashboard with predicate curation and a force-directed graph explorer.
-
-Neosis operates in two distinct operational modes: **Real-Time Mode** for instant watcher-driven ingestion, and **Bulk Indexing Mode** for high-throughput, distributed batch ingestion across multiple dynamic worker instances.
+Extracts `(subject, predicate, object)` triples from Markdown using an LLM, deduplicates them into a PostgreSQL knowledge graph, indexes edges in OpenSearch, and exposes a hybrid BM25 + graph traversal retrieval API.
 
 ---
 
-## System Architecture & Ingestion Modes
+## 1. What Problem This Solves
 
-Neosis supports two architectural execution paths tailored for active workspace development and distributed bulk ingestion.
+Chunk-based vector RAG breaks down in two scenarios:
+
+- **Multi-hop queries** — "What services depend on the database the billing module writes to?" requires traversing connections across documents. Vector similarity has no edge model; it retrieves isolated chunks and relies on the LLM to synthesize the path.
+- **Explainability** — a vector match returns a similarity score and a chunk. There is no way to trace *why* two facts are related or what document chain produced them.
+
+Noesis stores typed edges between named entities at ingestion time. Queries traverse those edges deterministically, and every result links back to a specific assertion, chunk, and source document.
+
+## 2. System Approach
 
 ```
-                  ┌─────────────────────────────────────────┐
-                  │          File Event Detected            │
-                  └────────────────────┬────────────────────┘
-                                       │
-                    Is Bulk Mode & Active Job Running?
-                                       ├─── No ──► [Real-Time Mode] (Synchronous Virtual Threads)
-                                       │
-                                      Yes
-                                       ▼
-                             [Bulk Indexing Mode]
-                         (Distributed Kafka Pipeline)
+File → Chunk → LLM → (S,P,O) → Dedup + Persist (Postgres + OS) → QUERYABLE
 ```
 
-### 1. Real-Time Mode (Default)
-Driven synchronously by Spring `ApplicationEventPublisher` + `@EventListener` on virtual threads. Every document pipeline run is allocated to an isolated, lightweight Virtual Thread.
+**Chunking.** Markdown is split into fixed-size windows with overlap. Each chunk is processed independently.
 
-* **Durability-Only Kafka**: Kafka is configured in **publish-only** mode for persistence and replay durability. The system registers event topics, but the consumer groups are no-ops; processing is orchestrated in-memory to keep developer cycles instant.
-* **Orchestration Flow**:
-  ```
-  FileWatcherService ──debounce──► DocumentIngestionService
-                                        │
-                                PipelineEvent(DOCUMENT_CREATED)
-                                        │
-                                LocalDocumentPipelineListener
-                                        │
-                                MarkdownChunkingService ──► PostgreSQL (chunks)
-                                        │
-                                PipelineEvent(CHUNKING_COMPLETED)
-                                        │
-                                AssertionExtractionService ──► Groq/Gemini API (LLM)
-                                        │
-                                PipelineEvent(ASSERTION_EXTRACTION_COMPLETED)
-                                        │
-                                GraphComponentService
-                                    ├─ Deduplicate nodes via SHA-256 checksum
-                                    ├─ Deduplicate edges via SHA-256 checksum
-                                    ├─ Bulk index assertions + edges to OpenSearch
-                                    └─ Mark document QUERYABLE
-  ```
-* **Local State Store**: SQLite (`.neosis/state.db`) tracks localized pipeline state and per-document progress.
+**LLM extraction.** Each chunk is sent to a configurable provider (Groq, Gemini, Ollama, or any REST API). The LLM returns zero or more `(subject, predicate, object)` triples. The predicate must match one of ~150 canonical entries (e.g., `DEPENDS`, `WRITES`). Near-misses (Levenshtein distance ≤ 2) are auto-corrected. Unrecognized predicates go to a human review queue.
 
-### 2. Bulk Indexing Mode (Distributed)
-Optimized for high-throughput initial indexing or massive workspace migrations. It suspends user modifications and query endpoints to prioritize 100% of network, database, and CPU bandwidth to ingestion.
+**Graph persistence.** Triples are deduplicated by SHA-256 of their canonical text. Nodes and edges are stored in PostgreSQL. Edges are indexed in OpenSearch for BM25 entry-point lookup.
 
-* **Orchestration Flow**:
-  ```
-  [BulkFileWatcher] 
-         │
-    (Walks directory, evaluates Consistent Hash Ownership)
-         │
-  [MarkdownChunkingService] ──► [PostgreSQL] (Chunks saved)
-         │
-    (Produces ChunkCreatedEvent to 'chunk.created.events')
-         │
-   ┌─────┴───────────────────────────────────────────────────────┐
-   │                   sgms-bulk-assertion-group                 │
-   └─────────────────────────────┬───────────────────────────────┘
-                                 ▼
-                      [BulkAssertionConsumer]
-                      ├─ Concurrency limit via Semaphore (default 8)
-                      ├─ Distributed lock: neosis:lock:assertion:<documentId>
-                      └─ [AssertionExtractionService] ──► [PostgreSQL] (Assertions saved)
-                                 │
-                           (Produces AssertionGeneratedEvent to 'assertion.generated.events')
-                                 │
-   ┌─────────────────────────────┴───────────────────────────────┐
-   │                     sgms-bulk-graph-group                   │
-   └─────────────────────────────┬───────────────────────────────┘
-                                 ▼
-                        [BulkGraphConsumer]
-                        ├─ Distributed lock: neosis:lock:graph:<ingestionRunId>
-                        └─ [GraphComponentService]
-                           ├─ Deduplicates nodes and edges via SHA-256
-                           ├─ Asynchronously indexes batch to OpenSearch
-                           └─ Marks document QUERYABLE
-  ```
-* **Query Freezing**: During active bulk job execution, the read/traversal APIs (`/api/tools/query_graph`) are suspended to guarantee undivided resource allocation.
-* **Read-Only Dashboard**: The frontend UI transitions to a read-only state, disabling predicate manual curation, node deletions, or manual ingestion requests.
-* **OpenSearch High-Density Writes**: Assertions and edges are queued and bulk-indexed into OpenSearch asynchronously. OpenSearch refresh intervals are delayed dynamically to avoid segment thrashing (governed by `sgms.bulk.osRefreshIntervalSeconds`), and payloads are constrained by bytes (up to `sgms.bulk.osBulkPayloadMaxBytes`).
-* **SSE-Driven Metrics**: Live metrics are aggregated by `BulkProgressStore` in Redis and streamed via Server-Sent Events (SSE) (`/api/bulk/progress`) to the dashboard, including:
-  - Files Discovered, Processed, and Failed.
-  - Assertions and Edges Generated.
-  - Backlog queues and active JVM worker memory footprints.
-  - Processing Throughput (documents/sec) and real-time ETA.
+**Retrieval.** BM25 over edge text finds entry nodes. BFS over PostgreSQL edges collects connected nodes up to a configurable depth. Results include source chunk and document for every assertion.
 
-### Operations Modes Comparison
+**Replayability.** Every ingestion run is a UUID-tracked unit. All state transitions (chunking, extraction, graph build) are persisted to an event log (Kafka in Bulk mode, JPA records in Real-Time mode). This means:
+- A failed extraction retries without re-chunking the document.
+- A corrupted graph index rebuilds from stored assertions without re-invoking the LLM.
+- On restart, `DocumentRecoveryService` resumes non-terminal documents from the last completed stage.
+- In Bulk mode, workers consume from the event log offset without coordinating recovery with each other.
 
-| Feature | Real-Time Mode | Bulk Indexing Mode |
-|---|---|---|
-| **Primary Driver** | Watcher debounced local events | Distributed Kafka consumer groups |
-| **Concurrency Model** | In-process Java 21 Virtual Threads | Distributed Workers + Semaphore limits |
-| **Query API Status** | Fully active and queryable | Suspended (frozen to prioritize writes) |
-| **UI Operations** | Read-Write (Curation, deletes active) | Read-only UI state during active execution |
-| **Progress Persistence**| SQLite (`.neosis/state.db`) | Redis state tracking + SSE Metrics |
-| **OpenSearch Batching** | Per-document updates | High-density bulk operations |
-| **Horizontal Scaling** | Single-instance watcher | Horizontal worker pools (Consistent Hashing) |
+The event log is append-only. No compaction or retention enforcement. Long-running deployments require external retention management.
 
----
+## 3. Why This Design Was Chosen
 
-## Distributed Architecture & Dynamic Worker Scaling
-
-Neosis handles massive datasets by executing in a horizontally-scalable, distributed multi-worker configuration. Multiple worker instances can run concurrently, sharing a PostgreSQL database, a Redis cache, and a Kafka cluster.
-
-### 1. Worker Registration & Metadata
-At startup, each worker node registers itself in the Redis-backed Worker Registry managed by `WorkerRegistryService`.
-* **Worker ID**: An 8-character unique alphanumeric identifier derived from a random UUID.
-* **Instance Name**: Constructed combining host name and worker ID (e.g., `hostname-a7c8f2b1`).
-* **Active Status**: Registered workers continuously track and expose:
-  - **Worker ID & Instance Name**: System identifiers.
-  - **Uptime**: Time elapsed since initialization.
-  - **Last Heartbeat**: ISO-8601 timestamp of the last heart-pulse.
-  - **Current Load**: Tracking the number of active threads/chunks in progress inside the worker instance.
-  - **Completion Throughput**: Performance metrics of documents indexed per second.
-
-### 2. Redis Heartbeats & Consistent Hashing
-To coordinate without a single point of failure (SPOF) or a complex leader election system, workers coordinate using Redis heartbeats and consistent hashing.
-* **Worker Heartbeats**: Every 5 seconds, a scheduled background thread (`worker-heartbeat`) pushes health packets to Redis with a 15-second TTL:
-  - `neosis:worker:<workerId>` -> `Instant.now().toString()`
-  - `neosis:worker-info:<workerId>` -> `instanceName|currentLoad|Instant.now().toString()`
-* **Path-Based Consistent Hashing**: When a file is discovered or modified, workers dynamically calculate path ownership to prevent duplicate ingestion:
-  1. The worker fetches active workers from the registry.
-  2. For each active worker, it calculates a hash weight using the MD5 digest:
-     $$\text{hash} = \text{MD5}(\text{workerId} + ":" + \text{normalizedFilePath})$$
-  3. The worker with the highest long weight becomes the owner of the document path.
-  4. Only the owner worker ingest and chunks the document. This avoids duplicate work and eliminates redundant LLM token costs.
-* **Stale Worker Eviction**: A scheduled cleanup thread (`worker-check`) runs every 10 seconds. If a worker's heartbeat in `neosis:worker:<workerId>` is older than 15 seconds, the worker registry evicts it, triggering active workers to recalculate consistent hash weights and dynamically take over orphaned files.
-
----
-
-## Kafka-driven Bulk Ingestion Pipeline
-
-When Bulk Mode is enabled and a job is running, the ingestion flow migrates from local synchronous event paths to distributed, asynchronous Kafka consumer groups.
-
-### 1. Consumers & Groups
-* **`BulkAssertionConsumer` (Consumer Group: `sgms-bulk-assertion-group`)**:
-  - Listens to `ChunkCreatedEvent` on the topic `chunk.created.events` (constant `KafkaTopics.CHUNK_CREATED_EVENTS`).
-  - Throttles execution through a `Semaphore` (concurrency limit of 8 or custom `sgms.bulk.llmConcurrency`) to regulate downstream API calls to LLM providers (Groq/Gemini).
-  - Dynamically increments worker active load in the registry, extracts semantic assertions via LLM, saves entities to PostgreSQL, and releases worker load.
-* **`BulkGraphConsumer` (Consumer Group: `sgms-bulk-graph-group`)**:
-  - Listens to `AssertionGeneratedEvent` on the topic `assertion.generated.events` (constant `KafkaTopics.ASSERTION_GENERATED_EVENTS`).
-  - Directs graph compiling, node/edge SHA-256 deduplication, and OpenSearch bulk writes through `GraphComponentService`.
-
-### 2. Redis Distributed Locking
-To enforce single-instance processing safety in a multi-instance cluster, Redis-backed distributed locks are acquired with a 30-minute default TTL:
-* **Assertion Extraction Lock**: Key `neosis:lock:assertion:<documentId>` ensures a document's chunks are only processed by one worker node at a time.
-* **Graph Building Lock**: Key `neosis:lock:graph:<ingestionRunId>` ensures graph node/edge deduplication and index compilation run on exactly one worker instance.
-
----
-
-## Redis Deduplication & State Tracking Layer
-
-High-throughput bulk ingestion demands bulletproof state tracking. The `RedisDedupService` manages deduplication and state preservation across the entire cluster.
-
-### 1. Deduplication (Checksum Tracking)
-* **Redis Key**: `neosis:dedup:checksum:<hash>`
-* **Value**: `<documentId>|<timestamp>`
-* **TTL**: 24 Hours
-* **Workflow**: When `BulkFileWatcher` scans a file, it computes a SHA-256 hash. The `DocumentIngestionService` queries the Redis dedup store. If the checksum is found, the file is immediately skipped:
-  ```
-  Checksum unchanged (Redis dedup) for document: docs/api.md. Skipping.
-  ```
-  If not found, the file is ingested, and the checksum is recorded in Redis to prevent any subsequent worker from ingesting it.
-
-### 2. State Tracking (Progress Preservation)
-* **Redis Key**: `neosis:dedup:state:<docId>`
-* **Value**: `<stage>|<timestamp>` (where `<stage>` corresponds to pipeline stages like `CHUNKING`, `PROCESSING_ASSERTIONS`, `QUERYABLE`)
-* **TTL**: 24 Hours
-* **Workflow**: As a document traverses the bulk pipeline, its active stage is updated in Redis. If a worker fails mid-job, or if a container restarts, the scheduler checks this state to resume execution exactly where it left off, avoiding redundant LLM compilation for completed stages.
-
----
-
-## Prerequisites
-
-- **Java 21** — built and tested with Eclipse Adoptium Temurin-21
-- **Docker + Docker Compose** — for running PostgreSQL, Apache Kafka, OpenSearch, and Redis
-- **Groq or Gemini API key** — for LLM-based assertion extraction
-- **~1 GB free RAM** for the Gradle daemon during builds (low-memory systems: use `bootJar -x test --no-daemon`)
-
----
-
-## Setup
-
-### 1. Start infrastructure
-
-```bash
-docker-compose up -d
-```
-
-This starts four containers:
-
-| Service | Container name | Port | Purpose |
+| Decision | Problem | Approach | Tradeoff |
 |---|---|---|---|
-| PostgreSQL 15 | `sgms-postgres` | 5432 | Canonical graph store (schema: `sgms`) |
-| Apache Kafka (KRaft) | `sgms-kafka` | 9092 | Publish-only durability & asynchronous bulk streams |
-| OpenSearch 2.13 | `sgms-opensearch` | 9200 | Query index |
-| Redis 7 | `sgms-redis` | 6379 | Distributed caching, heartbeats, lock manager, and dedup store |
+| Graph extraction | Vector similarity can't model relationships | LLM extracts typed edges at ingestion time | High per-document cost and latency. Brittle for unstructured text. In exchange: every fact is traceable, multi-hop queries use deterministic BFS. |
+| Kafka durability | Pipeline state must survive process crashes | Append-only event log. Stages can replay without re-ingesting source. | Kafka must be running. Real-Time mode publishes to Kafka but processes in-memory — a crash between publish and processing loses that state. |
+| Redis coordination | No central scheduler for Bulk workers | Heartbeat registry + consistent hashing for path assignment. Distributed locks prevent duplicate processing. | Stale workers go undetected until heartbeat timeout. Crashed workers hold locks until TTL expiry. Simpler than a central orchestrator but less deterministic. |
+| Deterministic traversal | Results must be auditable | BFS over exact edges in PostgreSQL | Fuzzy semantic queries may miss relevant nodes with different terminology. No dense embedding fallback. |
+| Human predicate review | LLM hallucinates invalid predicates | Unrecognized predicates queued for operator approval. Levenshtein auto-correct catches misspellings first. | Creates an operational queue. High ingestion volume can overwhelm reviewers. |
 
-Verify health:
+## 4. Operational Characteristics
 
-```bash
-docker ps --format "table {{.Names}}\t{{.Status}}"
+### Failure handling
+
+- **LLM call failure** — retried with exponential backoff up to a configured maximum. After exhaustion the document enters `FAILED_FATAL` and stops.
+- **Database write failure** — transaction rolls back. The document retries on the next scheduler tick.
+- **Kafka outage** — Real-Time mode continues (local event processing). Bulk mode stops.
+- **Redis outage** — API falls back to PostgreSQL. Real-Time mode continues (SQLite tracks state). Bulk mode loses worker coordination.
+
+### Scaling bottlenecks
+
+- **LLM API rate limits** — the most common bottleneck. A concurrency semaphore and optional calls-per-minute limiter provide backpressure.
+- **OpenSearch write pressure** — bulk ingestion can saturate OpenSearch on modest hardware.
+- **Single-node watcher** — Real-Time mode processes everything on one node. Throughput is bounded by that node's LLM concurrency.
+
+### Cost implications
+
+The dominant cost is LLM inference. Every chunk requires at least one LLM call. At 512 characters per chunk, a 50 KB document produces ~100 chunks. Token costs scale linearly with document volume and chunk count. Using a local Ollama model eliminates API fees but increases per-chunk latency.
+
+### Known limitations
+
+- **Narrative text** — documents without clear entity-relation structure produce sparse graphs. Retrieval degrades to BM25-only.
+- **Soft semantic queries** — "find anything related to security" requires exact keyword or entity match for entry. No dense embedding fallback.
+- **High update velocity** — every file change triggers full re-ingestion. No incremental diff.
+- **Cold start** — the graph is empty until at least one document is fully processed.
+
+## 5. Retrieval Model
+
+1. **BM25 entry** — the query string is matched against edge text in OpenSearch. The top-K matching edges identify candidate entry nodes.
+2. **BFS traversal** — from each entry node, traverse outgoing edges in PostgreSQL up to a configurable depth. All visited edges are collected.
+3. **Ranking** — results are scored by BM25 relevance (entry point) and traversal depth (shorter paths rank higher).
+
+Traversal depth is bounded because relevance degrades with each hop. Depth 3 captures direct dependencies and one transitive level without flooding the result set.
+
+Semantic similarity still matters at step 1: if the query uses different terminology than any stored edge, BM25 fails to find an entry node and traversal returns nothing. There is no fallback to dense embeddings.
+
+### Concrete example
+
+Query: *"What depends on the payment database?"*
+
+1. BM25 on edge text matches `(PaymentService, WRITES, PaymentDB)`. `PaymentDB` is entered as a node.
+2. BFS traverses incoming edges: `(BillingService, READS, PaymentDB)`, `(AuditService, READS, PaymentDB)`, `(ReportingService, DEPENDS, PaymentDB)`.
+3. Results sorted by path length:
+
+```
+BillingService   READS  PaymentDB   (depth 1, doc: architecture.md)
+AuditService     READS  PaymentDB   (depth 1, doc: compliance.md)
+ReportingService DEPENDS PaymentDB  (depth 1, doc: operations.md)
 ```
 
-### 2. Initialize Neosis
+Each result links to the source document and chunk that produced the assertion. At depth 2, traversal continues from those services to find transitive dependencies.
 
-```bash
-python neosis.py init
+## 6. Architecture
+
+```
+File/Dir → Chunk → LLM → (S,P,O) → Dedup → Postgres + OpenSearch → BM25 → BFS
+
+Modes:  Real-Time (FileWatcher → local pipeline)
+        Bulk (Consistent hash → Kafka → worker pool)
+Coordination: Redis (locks, registry, dedup cache)
 ```
 
-This creates `.neosis/` with:
+## 7. Running the System
 
-| File | Purpose |
-|---|---|
-| `state.db` | SQLite database tracking pipeline progress per document (used in Real-Time Mode) |
-| `config.json` | Glob patterns that control which files are watched |
-| `.gitignore` | Prevents `state.db` and retry logs from being committed |
-| `cache/` | Working directory for cache |
-| `retries/` | Per-document retry traceback logs |
+### Requirements
 
-The default include patterns in `.neosis/config.json` are:
+- Docker (PostgreSQL, Kafka, OpenSearch, Redis)
+- JDK 21 (auto-downloaded by Gradle toolchain)
 
+### Quick start
+
+```
+.\noesis-start.bat     # Docker → build JAR → launch on :8081
+.\noesis-stop.bat      # stop app → docker-compose down
+```
+
+### Configuration
+
+```
+python noesis.py setup      # interactive LLM provider config
+```
+
+Or from the Settings tab in the dashboard (`http://localhost:8081`). File glob patterns in `.noesis/config.json`:
 ```json
-{
-  "include": ["**/*.md", "docs/**/*.md", "README.md"],
-  "exclude": ["node_modules/**", ".git/**", "dist/**", "build/**", ".neosis/**"]
-}
+{ "include": ["**/*.md", "docs/**/*.md"],
+  "exclude": ["node_modules/**", ".git/**", "build/**", ".noesis/**"] }
 ```
 
-You can edit `config.json` to add or remove patterns — the service reloads it at startup.
+### Starting ingestion
 
-### 3. Configure the LLM provider
+- **Real-Time**: create or modify a Markdown file in the project root. The watcher picks it up within ~200 ms.
+- **Bulk**: `POST /api/bulk/start {"directory": "/path/to/docs"}` or via the dashboard.
 
-The default LLM provider is **Groq** (`llama-3.1-8b-instant`):
+## 8. API Summary
 
-```bash
-# Windows (PowerShell)
-$env:GROQ_API_KEY = "gsk_your_key_here"
-
-# Linux/macOS
-export GROQ_API_KEY="gsk_your_key_here"
-```
-
-Alternative providers (set `sgms.llm.provider` in `application.yml`):
-
-| Provider | Env var | Model |
-|---|---|---|
-| `groq` (default) | `GROQ_API_KEY` | `llama-3.1-8b-instant` |
-| `gemini` | `GEMINI_API_KEY` | gemini-1.5-flash |
-| `ollama` | (none) | `llama3.2:1b` (local) |
-| `mock` | (none) | Hardcoded test data |
-
-### 4. Build and start
-
-```bash
-./gradlew bootJar -x test
-java -jar build/libs/noesis-sgms-1.0.0-SNAPSHOT.jar --server.port=8081 --spring.profiles.active=dev
-```
-
-On low-memory systems, use `--no-daemon`:
-
-```bash
-./gradlew bootJar -x test --no-daemon
-```
-
-Server starts on **port 8081**. Confirm:
-
-```bash
-curl http://localhost:8081/actuator/health
-```
-
-```json
-{"status":"UP","components":{"db":{"status":"UP"},"redis":{"status":"UP"},"diskSpace":{"status":"UP"}}}
-```
-
-### 5. Open the dashboard
-
-Navigate to `http://localhost:8081` in a browser. The dashboard has three tabs:
-
-| Tab | Description |
+| Endpoint | Purpose |
 |---|---|
-| **Dashboard** | Real-time metrics cards + Chart.js time-series (throughput, latency, error rate) + D3 force-directed knowledge graph |
-| **Predicate Curation** | Approve/reject failed predicates; groups predicates into 7 categories with badge colours and hover-card suggestions |
-| **Explorer** | Full-screen D3 force-directed graph with zoom/pan; select nodes to see neighbours and traversal paths |
+| `GET /api/documents` | List documents with pipeline status |
+| `POST /api/documents/upload` | Upload a file for ingestion |
+| `DELETE /api/documents/{id}` | Soft delete (5 min grace window) |
+| `POST /api/documents/{id}/hard-delete` | Force delete |
+| `GET /api/tools/query_graph?text=...&depth=3` | BM25 → BFS graph query |
+| `GET /api/predicates/active` | List canonical predicates |
+| `GET /api/predicates/failed` | Predicates pending human review |
+| `POST /api/predicates/approve?name=...` | Approve a failed predicate |
+| `GET /api/llm/config` | Current LLM provider and settings |
+| `PUT /api/llm/config` | Update LLM config at runtime |
+| `GET /api/bulk/start` | Start bulk ingestion job |
+| `GET /actuator/health` | System health |
 
----
+Full API documentation: `docs/api.md`.
 
-## Configuration Properties
+## 9. Limitations
 
-Specify these properties in `application.yml` under the `sgms` namespace to customize system settings:
-
-### General & LLM Properties
-* `sgms.llm.provider`: `groq` (default), `gemini`, `ollama`, or `mock`.
-* `sgms.llm.model`: Model identifier to target (e.g. `llama-3.1-8b-instant` or `gemini-1.5-flash`).
-* `sgms.watch.dir`: Watcher target directory (default: `./noesis`).
-* `sgms.traversal.max-depth`: Max traversal depth for hybrid BFS graph queries (default: 3).
-
-### Bulk Mode Performance Configurations (`sgms.bulk.*`)
-
-| Property | Default | Description |
-|---|---|---|
-| `sgms.bulk.chunkBatchSize` | `50` | Number of chunks processed in a single batch. |
-| `sgms.bulk.osRefreshIntervalSeconds` | `30` | Interval to delay index refreshes during bulk index jobs to optimize throughput. |
-| `sgms.bulk.llmConcurrency` | `8` | Maximum concurrent LLM extraction requests per worker (governed by a Semaphore). |
-| `sgms.bulk.pgBatchSize` | `500` | Hibernate JDBC insert batch size for PostgreSQL database writes. |
-| `sgms.bulk.edgeBulkBatchSize` | `2000` | Max batch size of nodes/edges for OpenSearch bulk index requests. |
-| `sgms.bulk.osBulkPayloadMaxBytes` | `15728640` | Maximum byte payload size (15MB) allowed for a single OpenSearch bulk request. |
-| `sgms.bulk.kafkaConsumptionBatchSize` | `200` | Batch size limit for bulk Kafka listeners. |
-| `sgms.bulk.heartbeatIntervalSeconds` | `5` | Frequency of heartbeats sent by active worker nodes to Redis. |
-| `sgms.bulk.heartbeatTimeoutSeconds` | `15` | Expiration time for worker registry keys in Redis. Workers inactive beyond this are evicted. |
-| `sgms.bulk.workerCheckIntervalSeconds` | `10` | Frequency of the stale worker check thread. |
-
----
-
-## Usage
-
-### Ingesting a document (Real-Time Mode)
-
-Place a Markdown file **anywhere in the repository** (except `node_modules/`, `.git/`, `build/`, `.neosis/`, `logs/`). The file watcher recursively monitors the root directory and automatically detects new or modified files:
-
-```bash
-cat > docs/my_service.md << 'EOF'
-# My Service
-
-The processing of inbound payment requests is performed by the Transaction Processor.
-The validation of transaction data is handled by the Validation Service.
-The Transaction Processor calls the Banking Gateway for settlement.
-EOF
-```
-
-The file is detected within 100ms (new file) or 200ms (modification), and the pipeline runs:
-
-1. **Detection** — `FileWatcherService` debounces the event
-2. **Filtering** — `NeosisConfigService` checks the file path against `.neosis/config.json` glob patterns
-3. **Chunking** — `MarkdownChunkingService` splits into 512-char windows (64-char overlap)
-4. **LLM extraction** — `AssertionExtractionService` sends each chunk to Groq; responses are validated (predicate must match canonical enum, raw text must be grounded in the chunk)
-5. **Graph building** — `GraphComponentService` creates deduplicated nodes/edges via SHA-256 checksums
-6. **Indexing** — Bulk-index assertions + edges to OpenSearch asynchronously
-7. **Completion** — Document marked `QUERYABLE` in PostgreSQL and SQLite
-
-### Ingesting Documents (Bulk Indexing Mode)
-
-To run a massive batch ingestion:
-
-1. **Switch Mode**: Set the system mode to bulk via the API.
-2. **Initiate Bulk Scan**: Supply the root directory to ingest. Workers will coordinate consistent hash weights, distribute the workload, chunk content, route events through Kafka topics, and execute high-density writes into PostgreSQL and OpenSearch.
-3. **Stream Progress**: Open the dashboard to see live SSE-streamed throughput, queue backlogs, active worker pools, and expected ETA.
-
-#### Monitoring progress via CLI
-
-```bash
-python neosis.py status
-python neosis.py logs docs/my_service.md
-```
-
-The `status` command shows each document's pipeline stage:
-
-```
-File Path                Pipeline State         Progress
-──────────────────────────────────────────────────────────
-docs/my_service.md       QUERYABLE              3/3
-README.md                PROCESSING_ASSERTIONS  2/5
-```
-
-### Excluding files
-
-The exclude patterns in `.neosis/config.json` take precedence over includes. To exclude a file or directory, add a glob pattern:
-
-```json
-{
-  "include": ["**/*.md", "docs/**/*.md", "README.md"],
-  "exclude": ["node_modules/**", ".git/**", "dist/**", "build/**", ".neosis/**", "archive/**"]
-}
-```
-
-The watcher also skips the following directories at the OS level (regardless of config): `.git/`, `node_modules/`, `build/`, `.neosis/`.
-
----
-
-## Pipeline Stages
-
-| Stage | Description |
-|---|---|
-| `DISCOVERED` | File detected by watcher |
-| `CHUNKING` | Document being split into chunks |
-| `CHUNKING_COMPLETED` | Chunks written to PostgreSQL |
-| `PROCESSING_ASSERTIONS` | LLM extracting assertions per chunk |
-| `PROCESSING_GRAPH` | Graph component building (nodes, edges, OS index) |
-| `QUERYABLE` | Fully indexed and queryable |
-| `RETRYING` | LLM extraction failed, waiting for retry (exponential backoff: 15s, 30s, 60s, 120s, 240s; max 5 retries) |
-| `FAILED_FATAL` | All retries exhausted |
-
----
-
-## Predicate Validation and Curation
-
-### How it works
-
-1. The LLM is prompted with the full list of 121 valid predicates from `PredicateType`.
-2. The response is passed through `AssertionValidationService.resolvePredicate()` which normalizes tense (`ED` → stem+`S`, `ING` → stem+`S`, `ES` stripping, doubled-consonant handling).
-3. If normalization fails, the assertion is stored in `failed_predicate` — visible in the **Predicate Curation** tab.
-
-### Curation workflow
-
-| Action | Effect |
-|---|---|
-| **Approve** | The predicate is inserted into `active_predicate` with an auto-assigned group; future chunks can use it |
-| **Reject** | The failed predicate record is removed; the assertion is discarded |
-
-### Predicate groups
-
-Every active predicate is classified into one of 7 groups via keyword matching in `PredicateService`:
-
-| Group | Example predicates | Count |
-|---|---|---|
-| `BUSINESS_RULES` | MANAGES, GOVERNS, OWNS, APPROVES | 44 |
-| `DATA_PROCESSING` | PARSES, TRANSFORMS, INDEXES, GENERATES | 20 |
-| `EXECUTION_FLOW` | EXECUTES, DELEGATES, TRIGGERS, ORCHESTRATES | 14 |
-| `DATA_LIFECYCLE` | WRITES, READS, STORES, DELETES | 14 |
-| `COMMUNICATION` | SENDS, PUBLISHES, NOTIFIES, ALERTS | 9 |
-| `SECURITY_AUDIT` | VALIDATES, AUTHENTICATES, ENCRYPTS, LOGS | 9 |
-| `SYSTEM_INTEGRATION` | DEPENDS, EXTENDS, CONNECTS, INTEGRATES | 8 |
-
----
-
-## API Reference
-
-### Real-Time MC/Graph Tools
-
-| Method | Path | Parameters | Description |
-|---|---|---|---|
-| GET | `/api/tools/query_graph` | `text`, `depth` (default 2) | Hybrid BM25 + BFS graph query (Suspended during active Bulk Ingestion) |
-| GET | `/api/tools/explain_path_by_assertion_id` | `assertionId` | Trace assertion to source |
-| GET | `/api/tools/get_node_neighbour` | `nodeId`, `depth` (default 1) | Get neighbours of a node |
-| GET | `/api/tools/get_assertion_by_id` | `assertionId` | Get assertion details |
-| GET | `/api/tools/trigger_ingest` | `path` | Force re-ingest a file |
-| GET | `/actuator/health` | — | Health check |
-
-### Real-Time Dashboard (Metrics)
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/dashboard/metrics` | Real-time pipeline metrics (nodes, edges, throughput history, etc.) |
-| GET | `/api/dashboard/trends` | Time-series trend data |
-| GET | `/api/dashboard/latency` | Pipeline latency percentiles |
-| GET | `/api/dashboard/errors` | Recent error events |
-| GET | `/api/dashboard/recent` | Most recent pipeline events |
-
-### Bulk Ingestion & Worker API
-
-| Method | Path | Request Body | Description |
-|---|---|---|---|
-| GET | `/api/bulk/mode` | — | Get the current mode (`realtime` vs `bulk`), active directory, and job status. |
-| POST | `/api/bulk/mode` | `{"mode": "bulk"}` | Set the operation mode (`realtime` or `bulk`). Switching to realtime is blocked if a bulk job is active. |
-| POST | `/api/bulk/start` | `{"directory": "/path/to/docs"}` | Start a bulk ingestion job scanning and parsing files in the specified directory. |
-| POST | `/api/bulk/stop` | — | Stop the active bulk indexing job. |
-| GET | `/api/bulk/workers` | — | List all registered active workers, their load, last heartbeat, and hostnames. |
-| GET | `/api/bulk/progress` | — | Streams Server-Sent Events (SSE) containing real-time bulk metrics and worker updates. |
-| POST | `/api/bulk/clear-dedup` | — | Clears all deduplication checksums and states from Redis. |
-
-### Predicate Curation
-
-| Method | Path | Parameters | Description |
-|---|---|---|---|
-| GET | `/api/predicates/active` | — | All active predicates with groups |
-| GET | `/api/predicates/failed` | — | All failed (unrecognised) predicates |
-| POST | `/api/predicates/approve` | `name` | Approve a failed predicate into `active_predicate` |
-| POST | `/api/predicates/reject` | `name` | Reject and remove a failed predicate |
-
-### Graph Explorer
-
-| Method | Path | Parameters | Description |
-|---|---|---|---|
-| GET | `/api/graph/explore` | — | Full graph dump (nodes + edges) for visualisation |
-| GET | `/api/graph/paths` | `sourceId`, `targetId` | All paths between two nodes |
-
----
-
-## Tech Stack
-
-- **Java 21** + **Spring Boot 3.3.5**
-- **PostgreSQL 15** (Canonical graph store — assertions, nodes, edges, chunks, documents)
-- **OpenSearch 2.13** (Query index — BM25 scoring, adjacency lookup)
-- **Apache Kafka 7.6 (KRaft)** (Ingestion event serialization and distributed streaming)
-- **Redis 7** (State caching, worker heartbeat registry, deduplication checksum repository, and distributed locks)
-- **Groq API / Gemini API** (LLM-based semantic assertion extraction)
-- **SQLite 3** (Local state metadata index under `.neosis/state.db`)
-- **Vue 3 + Tailwind CSS** (Dashboard SPA interface)
-- **Chart.js 4 + D3.js 7** (Metrics rendering and 3D force-directed interactive graphs)
-
----
-
-## Troubleshooting
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `Native memory allocation failed` during build | System RAM too low for Gradle daemon | Build using `./gradlew bootJar -x test --no-daemon` |
-| Dashboard chart blank | Chart.js canvas sizing | Refresh the page or switch tabs |
-| LLM returns unknown predicates | Predicate not in `PredicateType` enum | Approve via Predicate Curation tab, or add to enum |
-| File not ingested in Real-Time Mode | Pattern not matched by `.neosis/config.json` | Check `include` patterns; file must match at least one |
-| Duplicate assertions or edges in graph | Database duplicate keys | Execute `POST /api/bulk/clear-dedup` to refresh Redis dedup indexes and clear local cache |
-| Stale or silent JVM workers in list | Heartbeat network timeout | Registry evicts nodes after 15 seconds of inactivity. Check if target workers are running and verified in `/api/bulk/workers` |
-| Ingestion frozen or locked | Redis lock collision | An active lock remains for 30 minutes. If a worker crashed, restart the coordinator, or execute `/api/bulk/clear-dedup` to force release |
+- **LLM extraction is lossy.** The LLM may hallucinate predicates, miss entities, or produce malformed triples. The auto-correct step catches misspellings but cannot fix semantically incorrect assertions.
+- **Ingestion is slow and expensive.** Every chunk triggers an LLM call. A 100 KB document can cost $0.05–$0.50 in API fees and take 30–120 seconds to process.
+- **Graph quality depends on source text quality.** Documents without clear entity-relation structure produce sparse or incorrect graphs. Implicit relationships are not extracted.
+- **No semantic fallback.** Queries that fail BM25 entry-point lookup return empty results. No dense embedding second pass exists.
+- **Bulk mode requires Kafka and Redis.** Real-Time mode works without them, but Bulk mode fails if either is unavailable.
+- **No incremental updates.** Any file change triggers full re-ingestion. No diff-based update for individual assertions.
+- **Operator burden.** The predicate review queue requires human attention. Unrecognized predicates can accumulate faster than operators can review them.
