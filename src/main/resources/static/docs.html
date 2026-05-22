@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noesis - System Architecture & API Documentation</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Glassmorphic CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <!-- Vue 3 Global CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        [v-cloak] {
+            display: none !important;
+        }
+        /* Active Tab Indicator glow */
+        .tab-active {
+            box-shadow: 0 0 15px -3px rgba(102, 252, 241, 0.4);
+        }
+        /* Glowing badges */
+        .badge-cyan {
+            background: rgba(102, 252, 241, 0.1);
+            border: 1px solid rgba(102, 252, 241, 0.2);
+            color: #66fcf1;
+        }
+        .badge-purple {
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            color: #c084fc;
+        }
+        .badge-amber {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+        .badge-emerald {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #34d399;
+        }
+    </style>
+</head>
+<body class="text-[#c5c6c7] font-sans antialiased overflow-x-hidden min-h-screen flex flex-col">
+    <div id="app" v-cloak class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="glass sticky top-0 z-50 border-b border-white/10 px-8 py-4 flex justify-between items-center shadow-lg backdrop-blur-md">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#66fcf1] to-[#45a29e] flex items-center justify-center font-bold text-[#0b0c10] text-lg shadow-[#66fcf1]/30 shadow-md">
+                    N
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
+                        NOESIS <span class="text-xs font-normal text-[#45a29e] tracking-widest border border-[#45a29e]/30 px-1.5 py-0.5 rounded-md">DOCS</span>
+                    </h1>
+                </div>
+            </div>
+
+            <!-- Tab Toggles -->
+            <div class="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+                <button @click="currentTab = 'architecture'" :class="currentTab === 'architecture' ? 'bg-[#66fcf1] text-[#0b0c10] font-bold tab-active' : 'text-gray-300 hover:text-white hover:bg-white/5'" class="px-6 py-2 rounded-lg text-sm transition-all duration-300">
+                    Architecture &amp; Design
+                </button>
+                <button @click="currentTab = 'api'" :class="currentTab === 'api' ? 'bg-[#66fcf1] text-[#0b0c10] font-bold tab-active' : 'text-gray-300 hover:text-white hover:bg-white/5'" class="px-6 py-2 rounded-lg text-sm transition-all duration-300">
+                    Interactive API Reference
+                </button>
+            </div>
+
+            <div></div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow p-6 md:p-8 max-w-7xl w-full mx-auto">
+            
+            <!-- ── TAB 1: SYSTEM ARCHITECTURE ────────────────────────────────────── -->
+            <div v-show="currentTab === 'architecture'" class="space-y-12">
+                <!-- Hero & Goal -->
+                <section class="glass rounded-2xl p-8 border border-white/10 shadow-xl relative overflow-hidden">
+                    <div class="absolute -right-16 -top-16 w-64 h-64 bg-[#66fcf1]/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <div class="absolute -left-16 -bottom-16 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider badge-cyan uppercase">Deterministic Knowledge Engine</span>
+                        </div>
+                        <h2 class="text-3xl font-extrabold text-white tracking-tight">How Noesis Builds Knowledge</h2>
+                        
+                        <!-- Comparative Hero Grid -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6">
+                            <!-- Left: RAG Failures -->
+                            <div class="rounded-xl p-6 bg-rose-500/5 border border-rose-500/20 space-y-4">
+                                <h3 class="text-base font-bold text-rose-400 flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                                    </svg>
+                                    Chunk-Based Vector RAG Failures
+                                </h3>
+                                <ul class="space-y-3 text-xs text-gray-400">
+                                    <li class="leading-relaxed">
+                                        <strong class="text-gray-300 block mb-0.5">Multi-Hop Queries</strong>
+                                        Traversing connections across documents (e.g., dependencies) fails because vector similarity has no edge model. It retrieves isolated chunks and relies on the LLM to guess the path.
+                                    </li>
+                                    <li class="leading-relaxed">
+                                        <strong class="text-gray-300 block mb-0.5">Non-Deterministic Retrieval</strong>
+                                        Two semantically similar chunks rank differently when embedding models change, chunk boundaries shift, or documents are edited, making stable audits difficult.
+                                    </li>
+                                    <li class="leading-relaxed">
+                                        <strong class="text-gray-300 block mb-0.5">Provenance Collapse</strong>
+                                        Similarity scores show retrieval quality but cannot explain *why* facts are related or trace the specific document chain that connected the result.
+                                    </li>
+                                </ul>
+                            </div>
+                            <!-- Right: Noesis Paradigm -->
+                            <div class="rounded-xl p-6 bg-[#66fcf1]/5 border border-[#66fcf1]/20 space-y-4">
+                                <h3 class="text-base font-bold text-[#66fcf1] flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.746 3.746 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z"/>
+                                    </svg>
+                                    The Noesis Ontological Paradigm
+                                </h3>
+                                <ul class="space-y-3 text-xs text-gray-400">
+                                    <li class="leading-relaxed">
+                                        <strong class="text-gray-300 block mb-0.5">Ingestion-Time Relationship Extraction</strong>
+                                        Converts chunks into structured, schema-constrained assertions during ingestion, deriving explicit graph nodes and edges before query execution.
+                                    </li>
+                                    <li class="leading-relaxed">
+                                        <strong class="text-gray-300 block mb-0.5">Deterministic BFS Traversal</strong>
+                                        Queries traverse explicit graph relationships using bounded Breadth-First Search. Entries match via BM25, and paths rank by precise depth.
+                                    </li>
+                                    <li class="leading-relaxed">
+                                        <strong class="text-gray-300 block mb-0.5">Absolute Provenance Tracing</strong>
+                                        Every node and edge retains database foreign-key tracing back to its originating assertion, source document path, section, and chunk hash.
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Visual Architecture Diagram Header & Switcher -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
+                    <div>
+                        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-[#66fcf1] rounded-full"></span>
+                            Ingestion Pipeline Mode Architecture
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">Select a pipeline mode to explore its visual lifecycle sequence and deep-technical execution flow.</p>
+                    </div>
+                    <div class="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1 self-start md:self-auto">
+                        <button @click="currentArchTab = 'realtime'" 
+                                :class="currentArchTab === 'realtime' ? 'bg-[#66fcf1] text-[#0b0c10] font-bold tab-active' : 'text-gray-300 hover:text-white hover:bg-white/5'" 
+                                class="px-5 py-2 rounded-lg text-xs transition-all duration-300 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+                            </svg>
+                            Realtime Pipeline
+                        </button>
+                        <button @click="currentArchTab = 'bulk'" 
+                                :class="currentArchTab === 'bulk' ? 'bg-[#66fcf1] text-[#0b0c10] font-bold tab-active' : 'text-gray-300 hover:text-white hover:bg-white/5'" 
+                                class="px-5 py-2 rounded-lg text-xs transition-all duration-300 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+                            </svg>
+                            Bulk Pipeline
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── SUB-TAB 1: REALTIME PIPELINE FLOWCHART ── -->
+                <div v-show="currentArchTab === 'realtime'" class="space-y-6 transition-all duration-300">
+                    <section class="glass rounded-2xl p-8 border border-white/10 shadow-xl space-y-6">
+                        <h4 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></span>
+                            Low-Latency Realtime Ingestion Flow (7 Canonical Stages)
+                        </h4>
+                        <p class="text-xs text-gray-400">
+                            The single-file realtime pipeline is engineered for instant updates. It listens for immediate file writes or uploads, uses local database states, and streams progress in real time.
+                        </p>
+                        
+                        <div class="rounded-xl p-2 md:p-6 space-y-8 bg-slate-950/40 border border-white/5">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 relative">
+                                <!-- Stage 1 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">01 / Routing</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-6 5L3 15m6-10l6 5-6 5m6-10h6v8"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Local Execution</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Incoming document triggers JVM watcher threads. Ingestion executes locally without cluster locks.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 2 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">02 / Checksum</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">SQLite State</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Computes SHA-256 and validates against local SQLite state store, skipping unmodified files.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 3 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">03 / AST Chunk</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Heading Split</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Parses Markdown into AST segments at headings. Chunks inherit hierarchy breadcrumbs.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 4 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">04 / LLM Extract</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 21l8.97-8.97M18 15V9a9 9 0 00-9-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125H9.75M21 9h-6V3"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Local Event Loop</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Extracts schema-constrained assertions sequentially. Checkpoints chunks locally.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 5 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">05 / Validate</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.333 9-6.03 9-11.622 0-1.31-.21-2.57-.599-3.75A11.952 11.952 0 0112 2.744z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Ground &amp; Align</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Grounds assertions against chunk text. Morphologically normalizes predicates.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 6 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">06 / Resolution</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Local Graph DB</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Resolves entity equivalence and persists semantic edges transactionally to PostgreSQL.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 7 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#66fcf1] uppercase">07 / Activation</span>
+                                            <svg class="w-4 h-4 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">SSE SSE Broadcast</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Indexes to OpenSearch. Immediately signals completion and streams metrics to the UI via SSE.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ── SUB-TAB 2: BULK PIPELINE FLOWCHART ── -->
+                <div v-show="currentArchTab === 'bulk'" class="space-y-6 transition-all duration-300">
+                    <section class="glass rounded-2xl p-8 border border-white/10 shadow-xl space-y-6">
+                        <h4 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
+                            Coordinated Bulk Ingestion Flow (7 Canonical Stages)
+                        </h4>
+                        <p class="text-xs text-gray-400">
+                            The bulk pipeline is built for distributed, high-throughput batch ingestion. It decouples scan tasks using Apache Kafka queues and synchronizes worker pools using Redis coordinate locks.
+                        </p>
+                        
+                        <div class="rounded-xl p-2 md:p-6 space-y-8 bg-slate-950/40 border border-white/5">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 relative">
+                                <!-- Stage 1 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">01 / Routing</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.3 20.25a12.318 12.318 0 01-6.3-1.015z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Consistent Lock</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Scanner registers paths recursively, acquiring Redis coordination locks to prevent multi-worker collisions.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 2 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">02 / Checksum</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Redis Deduplication</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Hashes are checked against cluster-wide Redis cache. New records trigger PostgreSQL synchronization.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 3 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">03 / AST Chunk</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">AST Parser</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Token-counted, hierarchical AST segmentation preserves structural markdown coordinates.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 4 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">04 / LLM Extract</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M9 16.25a3 3 0 00-3-3m12 0a3 3 0 00-3 3m-3-3.75V21M3.75 12h16.5M4.875 3h14.25c.621 0 1.125.504 1.125 1.125v12.75c0 .621-.504 1.125-1.125 1.125H4.875A1.125 1.125 0 013.75 16.875V4.125C3.75 3.504 4.254 3 4.875 3z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Kafka Workers</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Events stream through Kafka. Parallel worker pods scale dynamically, coordinating via Redis locks.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 5 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">05 / Validate</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.333 9-6.03 9-11.622 0-1.31-.21-2.57-.599-3.75A11.952 11.952 0 0112 2.744z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Taxonomy Normal</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Extracted properties are validated against text grounds and checked in the Ontological Curation queue.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 6 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">06 / Resolution</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">Batch Graph DB</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Batched entity resolutions aggregate semantic links, executing optimized commits to PostgreSQL.</p>
+                                    </div>
+                                </div>
+                                <!-- Stage 7 -->
+                                <div class="glass-card rounded-xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden group">
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span class="text-[9px] font-bold tracking-widest text-[#fbbf24] uppercase">07 / Activation</span>
+                                            <svg class="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.604 10.604z"/></svg>
+                                        </div>
+                                        <h4 class="text-xs font-bold text-white">OpenSearch Ingest</h4>
+                                        <p class="text-[10px] text-gray-400 leading-relaxed">Parallel OpenSearch batch indexing updates the active search catalog, activating query endpoints.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ── UNIFIED 7-STAGE DEEP-DIVE COMPARISON SECTION ── -->
+                <section class="space-y-8">
+                    <div class="border-b border-white/10 pb-4">
+                        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                            <svg class="w-5 h-5 text-[#66fcf1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.375m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03v-11.622z"/>
+                            </svg>
+                            Unified 7-Stage Architectural Deep-Dive
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">A side-by-side technical comparison of Real-Time vs Bulk mode mechanics, Guarantees, and Tradeoffs for each pipeline stage.</p>
+                    </div>
+
+                    <div class="space-y-8">
+                        <!-- Stage 1 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-6 5L3 15m6-10l6 5-6 5m6-10h6v8"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 1: Ingestion Initialization &amp; Distributed Routing</h4>
+                                        <p class="text-xs text-gray-400">Pipeline entry mechanisms and horizontal worker scheduling coordination.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 01</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Documents enter through direct API uploads or continuous filesystem watcher loops. File path ownership resolves locally inside independent watcher daemon execution threads. Zero cluster coordination or locking overhead exists.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Heavy directory collections enter through a multi-threaded batch scan. Document paths are distributed across worker nodes using consistent hashing algorithms. A short-lived coordination lock in Redis secures each file path to prevent collision.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Duplicate document ingestion is prevented across all active workers.</li>
+                                        <li>File scan ownership allocations remain strictly deterministic during bulk processing.</li>
+                                        <li>Crashed nodes automatically release execution ownership after lock expiration.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Continuous Redis cluster availability is operationally required for Bulk coordination.</li>
+                                        <li>Stale or offline workers are detected only after coordinate heartbeat timeout expiration.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 2 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 2: Checksum Deduplication &amp; State Synchronization</h4>
+                                        <p class="text-xs text-gray-400">Byte-level deduplication tracking against persistent ontological states.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 02</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Computes a SHA-256 hash of the document bytes and queries a local SQLite state database. If the hash matches an already queryable document version, the document is immediately skipped with zero further work.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">The worker computes the document's SHA-256 hash and validates it against a shared Redis cache to block duplicate processing. New document states are recorded in PostgreSQL and emitted into the event pipeline.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Unchanged documents are bypassed immediately, consuming zero LLM API call credits.</li>
+                                        <li>Deduplication safety functions consistently across single-node and cluster deployments.</li>
+                                        <li>Document ingestion state transitions remain fully resilient across system restarts.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Bulk deduplication relies entirely on the consistency of the shared Redis state catalog.</li>
+                                        <li>Real-time mode sacrifices distributed durability in favor of microsecond local checks.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 3 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 3: AST-Based Document Chunking</h4>
+                                        <p class="text-xs text-gray-400">Heading-boundary syntax parsing to preserve structural markdown context.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 03</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Parses the markdown structure locally. It segments text exactly at heading boundaries (e.g., `#`, `##`) to preserve logical blocks instead of naive token size splits. It assigns local checksums to track individual chunk updates.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Executes the same AST parser but processes chunks in high-throughput JVM memory pools. Each parsed segment gets labeled with hierarchical parent breadcrumbs and is prepared for bulk transport across Kafka workers.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Chunk boundaries remain completely stable and reproducible across subsequent ingestion runs.</li>
+                                        <li>The structural heading hierarchy of the markdown document remains fully preserved in graph properties.</li>
+                                        <li>Every downstream graph assertion maintains section-level, trace-capable text provenance.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Markdown files lacking standard, clear header boundaries yield sparse, poor-quality AST segments.</li>
+                                        <li>Output chunk token sizes vary heavily depending on the document's original formatting size.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 4 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M9 16.25a3 3 0 00-3-3m12 0a3 3 0 00-3 3m-3-3.75V21M3.75 12h16.5M4.875 3h14.25c.621 0 1.125.504 1.125 1.125v12.75c0 .621-.504 1.125-1.125 1.125H4.875A1.125 1.125 0 013.75 16.875V4.125C3.75 3.504 4.254 3 4.875 3z"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 4: Assertion Extraction &amp; Recovery Checkpointing</h4>
+                                        <p class="text-xs text-gray-400">Structured Subject-Predicate-Object conversion via LLM schema boundaries.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 04</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Processes chunks sequentially through a local single-threaded loop. The JVM checkpoints progress to local storage after each successfully completed chunk, enabling instant resumption if interrupted.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Distributes individual chunk tasks asynchronously across cluster queues (Apache Kafka topics). Concurrent worker threads pull tasks and acquire temporary Redis coordinate locks to prevent double-processing.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Interrupted ingestion resumed directly from the last completed chunk without repeating LLM requests.</li>
+                                        <li>Distributed worker pods are coordinated to ensure zero duplicate LLM API calls occur.</li>
+                                        <li>Extracted entity relationships are strictly bound to predefined ontological schemas.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>AI inference represents the primary processing latency and financial cost bottleneck.</li>
+                                        <li>Bulk extraction requires reliable external infrastructure nodes (Kafka and Redis instances).</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 5 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.333 9-6.03 9-11.622 0-1.31-.21-2.57-.599-3.75A11.952 11.952 0 0112 2.744z"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 5: Assertion Validation &amp; Predicate Normalization</h4>
+                                        <p class="text-xs text-gray-400">Ontological grounding and morphologic mapping to purge hallucinations.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 05</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Validates extracted Subject-Predicate-Object assertions locally. Unknown predicates map to a local curation table instantly. Operators approve and merge properties locally, initiating zero-cost database re-indexing.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Grounds assertions against source chunk texts at scale. Extracted predicates are checked against the shared ontology catalog. Unmapped or candidate predicates redirect to the central operator curation dashboard.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Every parsed graph edge remains strictly grounded in actual document chunk sentences.</li>
+                                        <li>Ontology schemas remain consistent across documents through alias normalization.</li>
+                                        <li>Invalid or unmapped predicates are isolated and blocked from polluting active search maps.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Strict grounding rules may occasionally reject partially correct edge structures.</li>
+                                        <li>Review queues introduce manual operations overhead under massive ingestion volumes.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 6 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 6: Graph Resolution &amp; Relationship Persistence</h4>
+                                        <p class="text-xs text-gray-400">Canonical entity merging and relational database persistence transactions.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 06</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Entities and relations write immediately to PostgreSQL using isolated single-row transactions. This ensures newly extracted connections become queryable by BFS APIs within milliseconds of a file edit event.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Accumulates resolved graph entities in optimized, multi-threaded batch buffers. It executes large, combined write transactions to PostgreSQL, temporarily disabling index checks to maximize throughput before rebuilds.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Equivalent entity strings merge into singular shared nodes across all source documents.</li>
+                                        <li>Duplicate relationship edges are blocked from redundant database re-insertions.</li>
+                                        <li>Graph nodes and edges maintain consistent relational links back to original files.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Aggressive string normalization rules can incorrectly collapse semantically distinct terms.</li>
+                                        <li>Entity merging accuracy depends heavily on name consistency in the source document files.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 7 Card -->
+                        <div class="glass rounded-2xl p-6 md:p-8 border border-white/10 shadow-xl space-y-6">
+                            <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.604 10.604z"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white">Stage 7: Search Indexing &amp; Query Activation</h4>
+                                        <p class="text-xs text-gray-400">OpenSearch indexing synchronizations and realtime SSE client notifications.</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded bg-[#66fcf1]/10 text-[#66fcf1] border border-[#66fcf1]/20 text-xs font-mono font-bold uppercase">Stage 07</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-400">
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-[#66fcf1] uppercase tracking-wider">Real-Time Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Directly indexes newly active assertions into OpenSearch. Broadcasters publish progress metrics immediately to all active dashboard browser clients using Server-Sent Events (SSE) streams.</p>
+                                </div>
+                                <div class="space-y-3">
+                                    <h5 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Bulk Mode Mechanics</h5>
+                                    <p class="leading-relaxed">Performs batch indexing against OpenSearch endpoints, allowing highly efficient search ingestion. SSE streams update the main dashboard status metrics at set periodic intervals to preserve client UI rendering performance.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-white/5 text-xs">
+                                <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-emerald-400 uppercase">Guarantees</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>Query APIs only expose and return fully-indexed documents, preventing raw state leaks.</li>
+                                        <li>OpenSearch indexing executes decoupled from PostgreSQL transaction blocks.</li>
+                                        <li>Ingestion progress counters and metrics update dynamically on active dashboards.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 space-y-2">
+                                    <h5 class="font-bold text-rose-400 uppercase">Tradeoffs</h5>
+                                    <ul class="list-disc pl-4 space-y-1 text-gray-400">
+                                        <li>OpenSearch synchronization propagation delay can briefly delay immediate query entry points.</li>
+                                        <li>Heavy bulk ingestion index rates can occasionally saturate constrained system hardware memory.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ── TAB 2: INTERACTIVE API REFERENCE ──────────────────────────────── -->
+            <div v-show="currentTab === 'api'" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- Sidebar API Groups -->
+                <aside class="lg:col-span-3 space-y-4">
+                    <div class="glass rounded-2xl p-4 border border-white/10 sticky top-24 space-y-6">
+                        <h3 class="text-sm font-bold text-white uppercase tracking-wider px-2">API Sub-Systems</h3>
+                        <nav class="space-y-1">
+                            <button v-for="group in apiGroups" 
+                                    :key="group.id" 
+                                    @click="activeApiGroup = group.id"
+                                    :class="activeApiGroup === group.id ? 'bg-[#66fcf1]/10 border-l-2 border-[#66fcf1] text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'"
+                                    class="w-full text-left px-3 py-2.5 rounded-r-lg text-sm transition-all duration-200 flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full" :class="group.color"></span>
+                                {{ group.name }}
+                            </button>
+                        </nav>
+                        <div class="border-t border-white/5 pt-4 px-2 space-y-2">
+                            <div class="text-[10px] text-gray-500 uppercase font-semibold">Headers Required</div>
+                            <code class="block bg-black/40 border border-white/5 rounded p-2 text-[10px] text-[#66fcf1] overflow-x-auto">Content-Type: application/json</code>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- API Endpoints Panel -->
+                <section class="lg:col-span-9 space-y-8">
+                    <!-- Title & Search -->
+                    <div class="glass rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 class="text-2xl font-bold text-white tracking-tight">{{ getActiveGroupDetails().name }}</h3>
+                            <p class="text-xs text-gray-400 mt-1">{{ getActiveGroupDetails().description }}</p>
+                        </div>
+                        <div class="relative w-full md:w-64">
+                            <input v-model="apiSearchQuery" type="text" placeholder="Search endpoints..." class="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50">
+                        </div>
+                    </div>
+
+                    <!-- Endpoints Loop -->
+                    <div class="space-y-6">
+                        <div v-for="api in filteredEndpoints" :key="api.path" class="glass rounded-2xl border border-white/10 p-6 space-y-6">
+                            
+                            <!-- Endpoint Title -->
+                            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/5 pb-4">
+                                <div class="flex items-center gap-3">
+                                    <span :class="getMethodBadgeClass(api.method)" class="px-2.5 py-1 rounded-lg text-xs font-bold font-mono tracking-wide uppercase border">
+                                        {{ api.method }}
+                                    </span>
+                                    <span class="font-mono text-sm font-bold text-white break-all">
+                                        {{ api.path }}
+                                    </span>
+                                </div>
+                                <span class="text-xs font-medium text-gray-400">
+                                    {{ api.summary }}
+                                </span>
+                            </div>
+
+                            <!-- Description -->
+                            <p class="text-sm text-gray-300 leading-relaxed">
+                                {{ api.description }}
+                            </p>
+
+                            <!-- Parameters -->
+                            <div v-if="api.params && api.params.length > 0" class="space-y-2">
+                                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Parameters</h4>
+                                <div class="overflow-x-auto rounded-xl border border-white/5 bg-black/10">
+                                    <table class="w-full text-left text-xs border-collapse">
+                                        <thead>
+                                            <tr class="bg-white/5 border-b border-white/5 text-gray-400 font-semibold uppercase">
+                                                <th class="px-4 py-2">Name</th>
+                                                <th class="px-4 py-2">Type</th>
+                                                <th class="px-4 py-2">Required</th>
+                                                <th class="px-4 py-2">Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="param in api.params" :key="param.name" class="border-b border-white/5">
+                                                <td class="px-4 py-2 font-mono font-bold text-[#66fcf1]">{{ param.name }}</td>
+                                                <td class="px-4 py-2 font-mono text-gray-400">{{ param.type }}</td>
+                                                <td class="px-4 py-2">
+                                                    <span :class="param.required ? 'text-rose-400 font-semibold' : 'text-gray-500'" class="text-[10px]">
+                                                        {{ param.required ? 'YES' : 'NO' }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-2 text-gray-300">{{ param.description }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Payload Model -->
+                            <div v-if="api.payload" class="space-y-2">
+                                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Request Payload</h4>
+                                <pre class="bg-[#050608] rounded-xl border border-white/5 p-4 text-[11px] text-emerald-400 overflow-x-auto"><code>{{ formatJSON(api.payload) }}</code></pre>
+                            </div>
+
+                            <!-- Example curl & Response -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- Curl -->
+                                <div class="space-y-2">
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Example Request</h4>
+                                    <div class="relative">
+                                        <pre class="bg-[#050608] rounded-xl border border-white/5 p-4 text-[10px] text-teal-300 overflow-x-auto whitespace-pre-wrap leading-relaxed"><code>{{ api.curl }}</code></pre>
+                                        <button @click="copyText(api.curl)" class="absolute right-3 top-3 px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] text-gray-400 hover:text-white hover:bg-white/10 transition-all font-semibold">Copy</button>
+                                    </div>
+                                </div>
+
+                                <!-- Response -->
+                                <div class="space-y-2">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Example Response</h4>
+                                        <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">200 OK</span>
+                                    </div>
+                                    <pre class="bg-[#050608] rounded-xl border border-white/5 p-4 text-[10px] text-purple-300 overflow-x-auto"><code>{{ formatJSON(api.response) }}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- No Endpoints state -->
+                        <div v-if="filteredEndpoints.length === 0" class="glass rounded-2xl p-12 text-center text-gray-500 border border-white/10">
+                            No endpoints match your query.
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="glass border-t border-white/5 px-8 py-6 flex justify-between items-center text-xs text-gray-500 mt-auto shadow-2xl backdrop-blur-md">
+            <div>
+                &copy; 2026 Noesis Platform. AGPL-3.0 License.
+            </div>
+            <div>
+                System Stack: Spring Boot &bull; PostgreSQL &bull; Redis &bull; OpenSearch &bull; Kafka
+            </div>
+        </footer>
+
+        <!-- Toast notification -->
+        <teleport to="body">
+            <div v-if="toast.visible"
+                 class="fixed top-6 right-6 z-[200] px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold bg-emerald-600 text-white border border-emerald-400/30"
+                 style="min-width: 250px;">
+                <div class="flex items-center justify-between gap-4">
+                    <span>{{ toast.message }}</span>
+                    <button @click="toast.visible = false" class="text-white/60 hover:text-white text-lg leading-none">&times;</button>
+                </div>
+            </div>
+        </teleport>
+    </div>
+
+    <!-- Interactive script definition -->
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    currentTab: 'architecture',
+                    currentArchTab: 'realtime',
+                    activeApiGroup: 'bulk',
+                    apiSearchQuery: '',
+                    toast: {
+                        visible: false,
+                        message: ''
+                    },
+                    apiGroups: [
+                        { id: 'bulk', name: 'Bulk Indexing', color: 'bg-amber-400', description: 'Kafka-driven asynchronous ingestion and worker management.' },
+                        { id: 'dashboard', name: 'Dashboard & Graph', color: 'bg-cyan-400', description: 'Real-time metrics, D3-compatible visual data, and traceability inspectors.' },
+                        { id: 'documents', name: 'Documents Manager', color: 'bg-purple-400', description: 'Upload, query, soft-delete, and hard-delete operations.' },
+                        { id: 'predicates', name: 'Predicate Curation', color: 'bg-emerald-400', description: 'ONTOLOGY CURATION: candidate registration, manual remapping, and zero-cost re-evaluations.' },
+                        { id: 'llm', name: 'LLM Configuration', color: 'bg-pink-400', description: 'Configure active models, rate limiters, and custom request bodies.' }
+                    ],
+                    endpoints: [
+                        // --- BULK ---
+                        {
+                            group: 'bulk',
+                            method: 'GET',
+                            path: '/api/bulk/mode',
+                            summary: 'Get active mode details',
+                            description: 'Returns the current mode of the system (realtime vs bulk), the active bulk watch directory, and whether a bulk job is actively scanning.',
+                            curl: 'curl -X GET http://localhost:8081/api/bulk/mode',
+                            response: {
+                                mode: "bulk",
+                                bulkDirectory: "C:\\workspace\\docs",
+                                bulkJobActive: true
+                            }
+                        },
+                        {
+                            group: 'bulk',
+                            method: 'POST',
+                            path: '/api/bulk/mode',
+                            summary: 'Switch pipeline mode',
+                            description: 'Transitions the pipeline mode between realtime watcher and bulk database ingestion. You cannot switch to realtime if a bulk job is actively running.',
+                            params: [
+                                { name: 'mode', type: 'String', required: true, description: 'Must be either "realtime" or "bulk".' }
+                            ],
+                            payload: { mode: "bulk" },
+                            curl: 'curl -X POST http://localhost:8081/api/bulk/mode \\\n  -H "Content-Type: application/json" \\\n  -d \'{"mode": "bulk"}\'',
+                            response: { mode: "bulk" }
+                        },
+                        {
+                            group: 'bulk',
+                            method: 'POST',
+                            path: '/api/bulk/start',
+                            summary: 'Start bulk watcher job',
+                            description: 'Launches a high-throughput, multi-threaded directory watch ingestion process. Discovered files are pushed to Kafka topics for asynchronous worker ingestion.',
+                            params: [
+                                { name: 'directory', type: 'String', required: true, description: 'The absolute directory path to scan.' }
+                            ],
+                            payload: { directory: "C:\\workspace\\docs" },
+                            curl: 'curl -X POST http://localhost:8081/api/bulk/start \\\n  -H "Content-Type: application/json" \\\n  -d \'{"directory": "C:\\\\workspace\\\\docs"}\'',
+                            response: {
+                                status: "started",
+                                directory: "C:\\workspace\\docs"
+                            }
+                        },
+                        {
+                            group: 'bulk',
+                            method: 'POST',
+                            path: '/api/bulk/stop',
+                            summary: 'Stop bulk ingestion',
+                            description: 'Interrupts the bulk directory scanner, stopping worker thread coordination.',
+                            curl: 'curl -X POST http://localhost:8081/api/bulk/stop',
+                            response: { status: "stopped" }
+                        },
+                        {
+                            group: 'bulk',
+                            method: 'GET',
+                            path: '/api/bulk/workers',
+                            summary: 'Get active workers',
+                            description: 'Retrieves a list of all active parallel worker nodes coordinate via Redis locks.',
+                            curl: 'curl -X GET http://localhost:8081/api/bulk/workers',
+                            response: [
+                                {
+                                    workerId: "c38df72d-862d-4bfd-a111-e6a8d8e2ea55",
+                                    instanceName: "Noesis-Worker-Daemon-1",
+                                    currentLoad: 4,
+                                    heartbeatTime: 1782293847923
+                                }
+                            ]
+                        },
+                        {
+                            group: 'bulk',
+                            method: 'POST',
+                            path: '/api/bulk/clear-dedup',
+                            summary: 'Clear chunk hash dedup cache',
+                            description: 'Clears all chunk hashes stored in the Redis deduplication cache. This forces re-evaluations across all documents.',
+                            curl: 'curl -X POST http://localhost:8081/api/bulk/clear-dedup',
+                            response: { status: "cleared" }
+                        },
+
+                        // --- DASHBOARD ---
+                        {
+                            group: 'dashboard',
+                            method: 'GET',
+                            path: '/api/dashboard/metrics',
+                            summary: 'Retrieve system metrics summary',
+                            description: 'Returns overall scale statistics including total nodes, total edges, estimated GPT-4o-mini tokens, average latency, and historical graph growth timelines.',
+                            curl: 'curl -X GET http://localhost:8081/api/dashboard/metrics',
+                            response: {
+                                totalNodes: 242,
+                                totalEdges: 412,
+                                totalDocuments: 15,
+                                totalChunks: 110,
+                                assertionsPerDoc: 27.46,
+                                assertionsPerChunk: 3.74,
+                                averageLatencyMs: 421.23,
+                                estimatedTokens: 410294,
+                                throughputHistory: [
+                                    { timestamp: "2026-05-22T19:00:00Z", documents: 10, chunks: 80, assertions: 280, nodes: 180, edges: 310 }
+                                ]
+                            }
+                        },
+                        {
+                            group: 'dashboard',
+                            method: 'GET',
+                            path: '/api/dashboard/graph',
+                            summary: 'Get D3.js compatible Graph Data',
+                            description: 'Retrieves all active nodes and links in a D3-compliant format. Supports optional project-level isolation.',
+                            params: [
+                                { name: 'project', type: 'String', required: false, description: 'Optional project root folder name to isolate graph query.' }
+                            ],
+                            curl: 'curl -X GET "http://localhost:8081/api/dashboard/graph?project=neosis"',
+                            response: {
+                                nodes: [
+                                    { id: "e1bc782d-862d-4bfd-a111-e6a8d8e2ea01", name: "Noesis Engine", normalizedName: "noesis engine" }
+                                ],
+                                links: [
+                                    { id: "a52cf72d-862d-4bfd-a111-e6a8d8e2ea99", source: "e1bc782d-862d-4bfd-a111-e6a8d8e2ea01", target: "e1bc782d-862d-4bfd-a111-e6a8d8e2ea22", label: "USES" }
+                                ]
+                            }
+                        },
+                        {
+                            group: 'dashboard',
+                            method: 'GET',
+                            path: '/api/dashboard/node/{id}/trace',
+                            summary: 'Trace supporting evidence for a Node',
+                            description: 'Returns the full list of raw, grounded assertions and sentences supporting the existence of a node to guarantee mathematical accountability.',
+                            params: [
+                                { name: 'id', type: 'UUID', required: true, description: 'The unique ID of the target NodeEntity.' }
+                            ],
+                            curl: 'curl -X GET http://localhost:8081/api/dashboard/node/e1bc782d-862d-4bfd-a111-e6a8d8e2ea01/trace',
+                            response: [
+                                {
+                                    assertionId: "da8f72d-862d-4bfd-a111-e6a8d8e2ea12",
+                                    subject: "Noesis Engine",
+                                    predicate: "USES",
+                                    object: "PostgreSQL",
+                                    rawText: "The Noesis Engine uses a PostgreSQL container for metadata indexing.",
+                                    normalizedText: "the noesis engine uses a postgresql container for metadata indexing",
+                                    documentName: "noesis-spec.md",
+                                    documentPath: "C:\\workspace\\docs\\noesis-spec.md"
+                                }
+                            ]
+                        },
+                        {
+                            group: 'dashboard',
+                            method: 'GET',
+                            path: '/api/dashboard/edge/{id}/trace',
+                            summary: 'Trace supporting evidence for an Edge',
+                            description: 'Returns the list of raw grounded sentences supporting the existence of a relationship edge.',
+                            params: [
+                                { name: 'id', type: 'UUID', required: true, description: 'The unique ID of the target EdgeEntity.' }
+                            ],
+                            curl: 'curl -X GET http://localhost:8081/api/dashboard/edge/a52cf72d-862d-4bfd-a111-e6a8d8e2ea99/trace',
+                            response: [
+                                {
+                                    assertionId: "da8f72d-862d-4bfd-a111-e6a8d8e2ea12",
+                                    subject: "Noesis Engine",
+                                    predicate: "USES",
+                                    object: "PostgreSQL",
+                                    rawText: "The Noesis Engine uses a PostgreSQL container for metadata indexing.",
+                                    normalizedText: "the noesis engine uses a postgresql container for metadata indexing",
+                                    documentName: "noesis-spec.md",
+                                    documentPath: "C:\\workspace\\docs\\noesis-spec.md"
+                                }
+                            ]
+                        },
+
+                        // --- DOCUMENTS ---
+                        {
+                            group: 'documents',
+                            method: 'GET',
+                            path: '/api/documents',
+                            summary: 'List indexed documents',
+                            description: 'Returns a list of all documents managed by the system, showing their processing state, current version, and deletion timers.',
+                            curl: 'curl -X GET http://localhost:8081/api/documents',
+                            response: [
+                                {
+                                    id: "968a1b3b-15c0-404a-8657-c2eba3c8d64e",
+                                    name: "noesis-spec.md",
+                                    status: "QUERYABLE",
+                                    version: 2,
+                                    createdAt: "2026-05-22T12:00:00Z",
+                                    projectRoot: "neosis",
+                                    markedForDeletionAt: null
+                                }
+                            ]
+                        },
+                        {
+                            group: 'documents',
+                            method: 'POST',
+                            path: '/api/documents/upload',
+                            summary: 'Upload document for ingestion',
+                            description: 'Accepts a multipart file upload, saves it, and immediately schedules event-driven processing.',
+                            params: [
+                                { name: 'file', type: 'MultipartFile', required: true, description: 'The file to upload (Markdown/Text/Excel).' }
+                            ],
+                            curl: 'curl -X POST http://localhost:8081/api/documents/upload \\\n  -F "file=@/path/to/spec.md"',
+                            response: {
+                                status: "uploaded",
+                                path: "C:\\workspace\\neosis\\docs\\spec.md"
+                            }
+                        },
+                        {
+                            group: 'documents',
+                            method: 'POST',
+                            path: '/api/documents/{id}/delete',
+                            summary: 'Soft-delete a document',
+                            description: 'Removes the document assertions from queryability and graph visualization instantly, while starting a 5-minute recoverability timer.',
+                            params: [
+                                { name: 'id', type: 'UUID', required: true, description: 'The document ID.' }
+                            ],
+                            curl: 'curl -X POST http://localhost:8081/api/documents/968a1b3b-15c0-404a-8657-c2eba3c8d64e/delete',
+                            response: {
+                                status: "ok",
+                                markedForDeletionAt: "2026-05-22T19:50:00Z"
+                            }
+                        },
+                        {
+                            group: 'documents',
+                            method: 'POST',
+                            path: '/api/documents/{id}/restore',
+                            summary: 'Restore soft-deleted document',
+                            description: 'Cancels the 5-minute deletion window, immediately restoring the document and its graph assertions.',
+                            params: [
+                                { name: 'id', type: 'UUID', required: true, description: 'The document ID.' }
+                            ],
+                            curl: 'curl -X POST http://localhost:8081/api/documents/968a1b3b-15c0-404a-8657-c2eba3c8d64e/restore',
+                            response: { status: "ok" }
+                        },
+                        {
+                            group: 'documents',
+                            method: 'POST',
+                            path: '/api/documents/{id}/hard-delete',
+                            summary: 'Instantly purge a document',
+                            description: 'Completely purges all database chunks, assertions, and metadata of a document, bypassing the soft-delete recovery window.',
+                            params: [
+                                { name: 'id', type: 'UUID', required: true, description: 'The document ID.' }
+                            ],
+                            curl: 'curl -X POST http://localhost:8081/api/documents/968a1b3b-15c0-404a-8657-c2eba3c8d64e/hard-delete',
+                            response: {
+                                status: "ok",
+                                deleted: "noesis-spec.md"
+                            }
+                        },
+
+                        // --- PREDICATES ---
+                        {
+                            group: 'predicates',
+                            method: 'GET',
+                            path: '/api/predicates/active',
+                            summary: 'Get active predicates registry',
+                            description: 'Returns the full list of approved relation names in the active ontology registry.',
+                            curl: 'curl -X GET http://localhost:8081/api/predicates/active',
+                            response: [
+                                { id: "c18df72d-862d-4bfd-a111-e6a8d8e2ea55", name: "USES", predicateGroup: "FUNCTIONAL" }
+                            ]
+                        },
+                        {
+                            group: 'predicates',
+                            method: 'GET',
+                            path: '/api/predicates/failed',
+                            summary: 'Get unrecognized candidates',
+                            description: 'Returns unrecognized predicate candidates extracted by the LLM that failed validation, sorted by occurrence count descending.',
+                            curl: 'curl -X GET http://localhost:8081/api/predicates/failed',
+                            response: [
+                                { name: "INHERITS_FROM", occurrenceCount: 14, lastSeenDocument: "spec.md", sampleRawText: "Noesis system inherits_from database" }
+                            ]
+                        },
+                        {
+                            group: 'predicates',
+                            method: 'POST',
+                            path: '/api/predicates/approve',
+                            summary: 'Approve unrecognized predicate candidate',
+                            description: 'Manually approves an unrecognized candidate predicate, making it active in the ontology registry. This immediately triggers a pending assertion replay from SQLite for all matches—generating assertions at zero LLM cost.',
+                            params: [
+                                { name: 'name', type: 'String', required: true, description: 'The predicate candidate name.' }
+                            ],
+                            curl: 'curl -X POST "http://localhost:8081/api/predicates/approve?name=INHERITS_FROM"',
+                            response: "Approved and reprocessed successfully: INHERITS_FROM"
+                        },
+                        {
+                            group: 'predicates',
+                            method: 'POST',
+                            path: '/api/predicates/map',
+                            summary: 'Remap predicate candidate to alias',
+                            description: 'Maps an unrecognized predicate to an existing (or new) active relation. Persists it in the Redis cache as an alias so future extractions map silently without a database hit.',
+                            params: [
+                                { name: 'failedName', type: 'String', required: true, description: 'The unrecognized candidate.' },
+                                { name: 'targetName', type: 'String', required: true, description: 'The target relation.' }
+                            ],
+                            curl: 'curl -X POST "http://localhost:8081/api/predicates/map?failedName=INHERITS_FROM&targetName=EXTENDS"',
+                            response: "Mapped and reprocessed successfully: INHERITS_FROM → EXTENDS"
+                        },
+
+                        // --- LLM CONFIG ---
+                        {
+                            group: 'llm',
+                            method: 'GET',
+                            path: '/api/llm/config',
+                            summary: 'Retrieve active LLM configurations',
+                            description: 'Returns active LLM connection configs, timeout thresholds, and rate limits.',
+                            curl: 'curl -X GET http://localhost:8081/api/llm/config',
+                            response: {
+                                provider: "groq",
+                                model: "llama-3.1-8b-instant",
+                                baseUrl: "http://localhost:11434",
+                                openaiBaseUrl: "https://api.openai.com/v1",
+                                timeoutSeconds: 120,
+                                rateLimiter: {
+                                    enabled: true,
+                                    maxCallsPerMinute: 15
+                                }
+                            }
+                        },
+                        {
+                            group: 'llm',
+                            method: 'PUT',
+                            path: '/api/llm/config',
+                            summary: 'Update active LLM configurations',
+                            description: 'Updates model, apiKeys, baseUrls, and rate limiting thresholds dynamically without a restart.',
+                            payload: {
+                                provider: "groq",
+                                model: "llama-3.1-8b-instant",
+                                timeoutSeconds: 120,
+                                rateLimiter: {
+                                    enabled: true,
+                                    maxCallsPerMinute: 15
+                                }
+                            },
+                            curl: 'curl -X PUT http://localhost:8081/api/llm/config \\\n  -H "Content-Type: application/json" \\\n  -d \'{"provider": "groq", "model": "llama-3.1-8b-instant", "timeoutSeconds": 120}\'',
+                            response: {}
+                        }
+                    ]
+                };
+            },
+            computed: {
+                filteredEndpoints() {
+                    return this.endpoints.filter(e => {
+                        if (e.group !== this.activeApiGroup) return false;
+                        if (!this.apiSearchQuery) return true;
+                        
+                        const query = this.apiSearchQuery.toLowerCase();
+                        return e.path.toLowerCase().includes(query) ||
+                               e.summary.toLowerCase().includes(query) ||
+                               e.description.toLowerCase().includes(query) ||
+                               e.method.toLowerCase().includes(query);
+                    });
+                }
+            },
+            methods: {
+                getActiveGroupDetails() {
+                    return this.apiGroups.find(g => g.id === this.activeApiGroup);
+                },
+                getMethodBadgeClass(method) {
+                    if (method === 'GET') return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
+                    if (method === 'POST') return 'bg-sky-500/10 border-sky-500/20 text-sky-400';
+                    if (method === 'PUT') return 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400';
+                    return 'bg-gray-500/10 border-gray-500/20 text-gray-400';
+                },
+                formatJSON(obj) {
+                    return JSON.stringify(obj, null, 4);
+                },
+                copyText(text) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        this.showToast('Copied to clipboard!');
+                    });
+                },
+                showToast(msg) {
+                    this.toast.message = msg;
+                    this.toast.visible = true;
+                    setTimeout(() => {
+                        this.toast.visible = false;
+                    }, 2500);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

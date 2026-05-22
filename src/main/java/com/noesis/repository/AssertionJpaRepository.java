@@ -13,6 +13,7 @@ public interface AssertionJpaRepository extends JpaRepository<AssertionEntity, U
     List<AssertionEntity> findByIngestionRunId(UUID ingestionRunId);
     List<AssertionEntity> findByDocumentId(UUID documentId);
     List<AssertionEntity> findByPredicate(String predicate);
+    List<AssertionEntity> findByChunkId(UUID chunkId);
 
     @Query("SELECT a.semanticChecksum FROM AssertionEntity a WHERE a.documentId = :documentId")
     List<String> findChecksumsByDocumentId(UUID documentId);

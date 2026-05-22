@@ -2,6 +2,7 @@ package com.noesis.controller;
 
 import com.noesis.client.LlmSettings;
 import com.noesis.service.NoesisConfigService;
+import com.noesis.service.FileWatcherService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 public class LlmConfigController {
 
     private final NoesisConfigService configService;
+    private final FileWatcherService fileWatcherService;
 
     @GetMapping("/config")
     public ResponseEntity<LlmSettings> getConfig() {
@@ -24,6 +26,7 @@ public class LlmConfigController {
     public ResponseEntity<Void> updateConfig(@RequestBody LlmSettings settings) {
         log.info("Updating LLM config: provider={}, model={}", settings.getProvider(), settings.getModel());
         configService.updateLlmSettings(settings);
+        fileWatcherService.restart();
         return ResponseEntity.ok().build();
     }
 }

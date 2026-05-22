@@ -68,8 +68,54 @@ for /f "usebackq tokens=1,* delims==" %%A in (`%PYTHON_CMD% "%~dp0noesis.py" get
 )
 echo.
 
-REM ── 3. Build JAR ───────────────────────────────────────────────────────────
-echo [3/5] Building application...
+REM ── 3. Find Java 21 (Gradle toolchain OR JAVA_HOME OR PATH) ────────────────
+echo [3/5] Finding Java 21 runtime...
+set "JAVA_CMD="
+set "JAVA_HOME_DIR="
+for /f "delims=" %%j in ('dir /b /s "%USERPROFILE%\.gradle\jdks\java.exe" 2^>nul') do (
+    set "JAVA_CMD=%%j"
+    goto JAVA_FOUND
+)
+if not defined JAVA_HOME goto CHECK_PATH
+if not exist "%JAVA_HOME%\bin\java.exe" goto CHECK_PATH
+set "JAVA_CMD=%JAVA_HOME%\bin\java.exe"
+set "JAVA_HOME_DIR=%JAVA_HOME%"
+goto JAVA_FOUND
+
+:CHECK_PATH
+where java >nul 2>&1
+if %ERRORLEVEL% equ 0 set "JAVA_CMD=java"
+
+:JAVA_FOUND
+if not defined JAVA_CMD goto JAVA_NOT_FOUND
+if not defined JAVA_HOME_DIR (
+    for %%i in ("%JAVA_CMD%") do (
+        for %%p in ("%%~dpi..") do set "JAVA_HOME_DIR=%%~fp"
+    )
+)
+"%JAVA_CMD%" -version 2>&1 | findstr "21" >nul
+if %ERRORLEVEL% equ 0 goto JAVA_VERSION_OK
+echo WARNING: Java version may not be 21.
+echo   This can cause NoClassDefFoundError if the JAR was compiled with Java 21.
+echo   Install JDK 21 and set JAVA_HOME, or let Gradle download it automatically.
+:JAVA_VERSION_OK
+echo   Using: %JAVA_CMD%
+if not defined JAVA_HOME_DIR goto SKIP_SET_HOME
+echo   Setting JAVA_HOME=%JAVA_HOME_DIR%
+set "JAVA_HOME=%JAVA_HOME_DIR%"
+:SKIP_SET_HOME
+echo.
+goto BUILD_STEP
+
+:JAVA_NOT_FOUND
+echo ERROR: Java not found. Install JDK 21 and set JAVA_HOME.
+pause
+exit /b 1
+
+:BUILD_STEP
+
+REM ── 4. Build JAR ───────────────────────────────────────────────────────────
+echo [4/5] Building application...
 call .\gradlew.bat bootJar -q
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Build failed.
@@ -77,41 +123,6 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-REM ── 4. Find Java 21 (Gradle toolchain OR JAVA_HOME OR PATH) ────────────────
-echo [4/5] Finding Java 21 runtime...
-set "JAVA_CMD="
-if exist "%USERPROFILE%\.gradle\jdks" (
-    for /d /r "%USERPROFILE%\.gradle\jdks" %%d in (*) do (
-        if exist "%%d\bin\java.exe" (
-            set "JAVA_CMD=%%d\bin\java.exe"
-            goto JAVA_FOUND
-        )
-    )
-)
-if defined JAVA_HOME (
-    if exist "%JAVA_HOME%\bin\java.exe" (
-        set "JAVA_CMD=%JAVA_HOME%\bin\java.exe"
-        goto JAVA_FOUND
-    )
-)
-where java >nul 2>&1
-if %ERRORLEVEL% equ 0 set "JAVA_CMD=java"
-:JAVA_FOUND
-if not defined JAVA_CMD (
-    echo ERROR: Java not found. Install JDK 21 and set JAVA_HOME.
-    pause
-    exit /b 1
-)
-"%JAVA_CMD%" -version 2>&1 | findstr "21" >nul
-if %ERRORLEVEL% neq 0 (
-    echo WARNING: Java version may not be 21 (found: 
-    "%JAVA_CMD%" -version 2>&1
-    echo ).
-    echo   This can cause NoClassDefFoundError if the JAR was compiled with Java 21.
-    echo   Install JDK 21 and set JAVA_HOME, or let Gradle download it automatically.
-)
-echo   Using: %JAVA_CMD%
-echo.
 for /f "tokens=*" %%j in ('dir /b /s build\libs\*-SNAPSHOT.jar 2^>nul') do (
     if not defined JAR_PATH set "JAR_PATH=%%j"
 )

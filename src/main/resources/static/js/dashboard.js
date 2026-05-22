@@ -40,9 +40,11 @@ const app = createApp({
                 timeoutSeconds: 120,
                 customRequestTemplate: '',
                 customResponsePath: '',
-                rateLimiter: { enabled: false, maxCallsPerMinute: 5 }
+                rateLimiter: { enabled: false, maxCallsPerMinute: 5 },
+                watchDirectories: []
             },
             settingsSaved: false,
+            watchDirectoriesInput: '',
             // Bulk mode
             bulkMode: false,
             bulkJobActive: false,
@@ -86,6 +88,15 @@ const app = createApp({
                     return a.localeCompare(b);
                 })
             );
+        },
+        bulkProgressPercent() {
+            const d = this.bulkProgress.filesDiscovered || 0;
+            const p = this.bulkProgress.filesProcessed || 0;
+            if (d === 0) return 0;
+            return Math.min(100, Math.round((p / d) * 100));
+        },
+        autoApprovedCount() {
+            return this.autoApprovedNames.length;
         }
     },
     methods: {
@@ -352,8 +363,10 @@ const app = createApp({
                         rateLimiter: {
                             enabled: data.rateLimiter ? data.rateLimiter.enabled : false,
                             maxCallsPerMinute: data.rateLimiter ? data.rateLimiter.maxCallsPerMinute : 5
-                        }
+                        },
+                        watchDirectories: data.watchDirectories || []
                     };
+                    this.watchDirectoriesInput = (data.watchDirectories || []).join('\n');
                     this.settingsSaved = false;
                 }
             } catch (err) {
@@ -362,6 +375,11 @@ const app = createApp({
         },
         async saveLlmConfig() {
             try {
+                this.llmConfig.watchDirectories = this.watchDirectoriesInput
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+
                 const res = await fetch('/api/llm/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -742,17 +760,6 @@ const app = createApp({
     },
     beforeUnmount() {
         if (this.metricsEventSource) this.metricsEventSource.close();
-    },
-    computed: {
-        bulkProgressPercent() {
-            const d = this.bulkProgress.filesDiscovered || 0;
-            const p = this.bulkProgress.filesProcessed || 0;
-            if (d === 0) return 0;
-            return Math.min(100, Math.round((p / d) * 100));
-        },
-        autoApprovedCount() {
-            return this.autoApprovedNames.length;
-        }
     }
 });
 

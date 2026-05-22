@@ -45,7 +45,7 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="bg-[#0b0c10] text-[#c5c6c7] font-sans antialiased overflow-x-hidden">
-    <div id="app" class="min-h-screen flex flex-col">
+    <div id="app" class="min-h-screen flex flex-col" v-cloak>
         <!-- Top Nav Bar -->
         <header class="glass sticky top-0 z-50 border-b border-white/10 px-6 py-4 flex justify-between items-center shadow-lg backdrop-blur-md">
             <div class="flex items-center gap-3">
@@ -73,6 +73,9 @@
                 <button @click="currentTab = 'settings'; fetchLlmConfig()" :class="currentTab === 'settings' ? 'bg-[#66fcf1] text-[#0b0c10] font-semibold' : 'text-gray-300 hover:text-white hover:bg-white/5'" class="px-5 py-2 rounded-lg text-sm transition-all duration-300">
                     Settings
                 </button>
+                <a href="/docs.html" target="_blank" class="text-gray-300 hover:text-[#66fcf1] hover:bg-white/5 px-5 py-2 rounded-lg text-sm transition-all duration-300 flex items-center gap-1 font-medium">
+                    Docs ↗
+                </a>
             </div>
 
             <!-- Mode Toggle -->
@@ -299,35 +302,9 @@
                             </thead>
                             <tbody>
                                 <tr v-for="pred in failedPredicates" :key="pred.name" 
-                                    @mouseenter="hoveredPredicate = pred" 
-                                    @mouseleave="hoveredPredicate = null"
                                     class="border-b border-white/5 hover:bg-white/5 transition-all">
                                     <td class="px-6 py-4 font-mono font-bold text-[#66fcf1] relative">
                                         {{ pred.name }}
-                                        
-                                        <!-- Hover Recommendation Slide-out Panel -->
-                                        <div v-show="hoveredPredicate === pred" 
-                                             class="absolute left-6 top-14 z-50 w-80 glass p-4 rounded-xl border border-white/10 shadow-2xl backdrop-blur-md text-xs space-y-2 pointer-events-none text-left">
-                                            <h4 class="font-bold text-[#66fcf1] flex items-center gap-1.5">
-                                                Group Recommendation
-                                            </h4>
-                                            <p class="text-gray-400 leading-relaxed">
-                                                Before approving <strong class="text-white">{{ pred.name }}</strong>, check if an active predicate in the <span class="text-purple-400 font-semibold">{{ getFriendlyGroupName(pred.predicateGroup) }}</span> group fits your needs to keep the ontology clean:
-                                            </p>
-                                            <div class="flex flex-wrap gap-1.5 mt-2">
-                                                <span v-for="activePred in getActivePredicatesInGroup(pred.predicateGroup).slice(0, 8)" 
-                                                      :key="activePred.name"
-                                                      class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px] text-gray-300">
-                                                    {{ activePred.name }}
-                                                </span>
-                                                <span v-if="getActivePredicatesInGroup(pred.predicateGroup).length > 8" class="text-gray-500 font-mono text-[9px] self-center">
-                                                    +{{ getActivePredicatesInGroup(pred.predicateGroup).length - 8 }} more
-                                                </span>
-                                                <span v-if="getActivePredicatesInGroup(pred.predicateGroup).length === 0" class="text-gray-500 italic text-[10px]">
-                                                    No active members in this group yet.
-                                                </span>
-                                            </div>
-                                        </div>
                                     </td>
                                     <td class="px-6 py-4">
                                         <span :class="getGroupBadgeClass(pred.predicateGroup)" class="px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide border">
@@ -760,6 +737,14 @@
                             <label class="block text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wider">Timeout (seconds)</label>
                             <input v-model.number="llmConfig.timeoutSeconds" type="number" min="10" max="600" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#66fcf1]/50">
                         </div>
+                    </div>
+
+                    <h3 class="text-base font-bold text-white mt-8 mb-2">Monitored Directories</h3>
+                    <p class="text-xs text-gray-400 mb-4 leading-relaxed">
+                        Specify absolute paths of directories to scan and monitor for document ingestion (one path per line). Documents in these folders will be indexed recursively and watched in real-time. If left blank, Noesis will default to watching the active workspace root.
+                    </p>
+                    <div class="mb-6">
+                        <textarea v-model="watchDirectoriesInput" rows="4" placeholder="e.g. C:\Users\Niranjan\Documents\my-project-docs" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-mono placeholder-gray-500 focus:outline-none focus:border-[#66fcf1]/50 transition-all duration-300"></textarea>
                     </div>
 
                     <h3 class="text-base font-bold text-white mt-8 mb-4">Rate Limiter</h3>

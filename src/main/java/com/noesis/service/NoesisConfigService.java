@@ -24,6 +24,11 @@ public class NoesisConfigService {
     private final ObjectMapper objectMapper;
     private final List<PathMatcher> includeMatchers = new ArrayList<>();
     private final List<PathMatcher> excludeMatchers = new ArrayList<>();
+    private final List<String> watchDirectories = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public List<String> getWatchDirectories() {
+        return watchDirectories;
+    }
 
     @Value("${noesis.llm.base-url:http://localhost:11434}")
     private String defaultBaseUrl;
@@ -59,6 +64,7 @@ public class NoesisConfigService {
         Path configPath = Paths.get(CONFIG_FILE_PATH).toAbsolutePath();
         List<String> includes = new ArrayList<>();
         List<String> excludes = new ArrayList<>();
+        List<String> loadedWatchDirs = new ArrayList<>();
         LlmSettings loaded = new LlmSettings();
 
         if (Files.exists(configPath)) {
@@ -80,6 +86,13 @@ public class NoesisConfigService {
                     }
                 }
 
+                JsonNode watchNode = rootNode.path("watch_directories");
+                if (watchNode.isArray()) {
+                    for (JsonNode node : watchNode) {
+                        loadedWatchDirs.add(node.asText());
+                    }
+                }
+
                 JsonNode llmNode = rootNode.path("llm");
                 if (llmNode.isObject()) {
                     loaded = parseLlmNode(llmNode);
@@ -91,8 +104,12 @@ public class NoesisConfigService {
             log.info(".noesis/config.json not found. Using default rules.");
         }
 
+        this.watchDirectories.clear();
+        this.watchDirectories.addAll(loadedWatchDirs);
+
         // Fill gaps from environment / application defaults
         mergeLlmDefaults(loaded);
+        loaded.setWatchDirectories(new ArrayList<>(this.watchDirectories));
 
         this.llmSettings = loaded;
 
@@ -168,6 +185,10 @@ public class NoesisConfigService {
 
     public synchronized void updateLlmSettings(LlmSettings settings) {
         this.llmSettings = settings;
+        this.watchDirectories.clear();
+        if (settings.getWatchDirectories() != null) {
+            this.watchDirectories.addAll(settings.getWatchDirectories());
+        }
         persistConfig();
     }
 
@@ -189,6 +210,11 @@ public class NoesisConfigService {
                 }
             }
 
+            var watchArray = root.putArray("watch_directories");
+            for (String dir : watchDirectories) {
+                watchArray.add(dir);
+            }
+
             ObjectNode llmNode = objectMapper.createObjectNode();
             llmNode.put("provider", llmSettings.getProvider());
             llmNode.put("model", llmSettings.getModel());
@@ -206,15 +232,25 @@ public class NoesisConfigService {
 
             root.set("llm", llmNode);
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(configPath.toFile(), root);
-            log.info("LLM configuration saved to {}", configPath);
+            log.info("Configuration saved to {}", configPath);
         } catch (IOException e) {
-            log.error("Failed to persist LLM config to .noesis/config.json", e);
+            log.error("Failed to persist configuration to .noesis/config.json", e);
         }
     }
 
     public boolean shouldIndex(Path filePath) {
-        Path absoluteRoot = Paths.get("").toAbsolutePath().normalize();
         Path absoluteFilePath = filePath.toAbsolutePath().normalize();
+        Path absoluteRoot = Paths.get("").toAbsolutePath().normalize();
+
+        // Identify if filePath resides inside any of the configured watch_directories
+        for (String watchDir : watchDirectories) {
+            Path watchPath = Paths.get(watchDir).toAbsolutePath().normalize();
+            if (absoluteFilePath.startsWith(watchPath)) {
+                absoluteRoot = watchPath;
+                break;
+            }
+        }
+
         Path relativePath;
         try {
             relativePath = absoluteRoot.relativize(absoluteFilePath);

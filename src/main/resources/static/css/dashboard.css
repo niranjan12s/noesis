@@ -25,10 +25,27 @@ body {
 
 /* Glassmorphism Styles */
 .glass {
-    background: rgba(15, 20, 30, 0.45);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 22, 36, 0.5) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important;
+}
+
+.glass-card {
+    background: rgba(15, 22, 36, 0.3) !important;
+    backdrop-filter: blur(16px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+.glass-card:hover {
+    background: rgba(15, 22, 36, 0.5) !important;
+    border-color: rgba(102, 252, 241, 0.3) !important;
+    box-shadow: 0 12px 40px 0 rgba(102, 252, 241, 0.15) !important;
+    transform: translateY(-2px) !important;
 }
 
 .card {
@@ -109,4 +126,9 @@ body {
     50% {
         opacity: .4;
     }
+}
+
+/* Prevent Vue compile flash */
+[v-cloak] {
+    display: none !important;
 }

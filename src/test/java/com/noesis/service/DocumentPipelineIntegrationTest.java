@@ -69,6 +69,9 @@ public class DocumentPipelineIntegrationTest {
     @Autowired
     private ActivePredicateRepository activePredicateRepository;
 
+    @Autowired
+    private NoesisStateService noesisStateService;
+
     @MockBean
     private LlmClient llmClient;
 
@@ -313,5 +316,168 @@ public class DocumentPipelineIntegrationTest {
         List<AssertionEntity> savedAssertions = assertionJpaRepository.findAll();
         assertEquals(1, savedAssertions.size(), "Collapsed assertion should be saved");
         assertEquals("IMPLEMENTS", savedAssertions.get(0).getPredicate());
+    }
+
+    @Test
+    @Transactional
+    public void testChunkBasedDiffingAndAssertionReuse() throws Exception {
+        // Step 1: Clean/setup for v1
+        assertionJpaRepository.deleteAll();
+        chunkJpaRepository.deleteAll();
+
+        // Create Chunk 1 (will be unchanged)
+        UUID chunk1Id = UUID.randomUUID();
+        ChunkEntity chunk1 = ChunkEntity.builder()
+                .id(chunk1Id)
+                .documentId(UUID.fromString(documentId))
+                .documentVersion(1)
+                .sectionPath("Section A")
+                .content("Noesis processes pipelines.")
+                .normalizedContent("noesis processes pipelines")
+                .chunkChecksum("checksum-a")
+                .sequenceNumber(0)
+                .createdAt(Instant.now())
+                .build();
+
+        // Create Chunk 2 (will be modified)
+        UUID chunk2Id = UUID.randomUUID();
+        ChunkEntity chunk2 = ChunkEntity.builder()
+                .id(chunk2Id)
+                .documentId(UUID.fromString(documentId))
+                .documentVersion(1)
+                .sectionPath("Section B")
+                .content("Noesis analyzes documents.")
+                .normalizedContent("noesis analyzes documents")
+                .chunkChecksum("checksum-b")
+                .sequenceNumber(1)
+                .createdAt(Instant.now())
+                .build();
+
+        chunkJpaRepository.saveAll(List.of(chunk1, chunk2));
+
+        // Mock LLM response for v1
+        AssertionExtractionResponse assertion1 = new AssertionExtractionResponse();
+        assertion1.setSubjectText("Noesis");
+        assertion1.setPredicate("PROCESSES");
+        assertion1.setObjectText("pipelines");
+        assertion1.setRawText("Noesis processes pipelines");
+        assertion1.setNormalizedText("Noesis processes pipelines");
+        assertion1.setAttributes(new HashMap<>());
+
+        AssertionExtractionResponse assertion2 = new AssertionExtractionResponse();
+        assertion2.setSubjectText("Noesis");
+        assertion2.setPredicate("ANALYZES");
+        assertion2.setObjectText("documents");
+        assertion2.setRawText("Noesis analyzes documents");
+        assertion2.setNormalizedText("Noesis analyzes documents");
+        assertion2.setAttributes(new HashMap<>());
+
+        when(llmClient.extractAssertions("Section A", "Noesis processes pipelines.")).thenReturn(List.of(assertion1));
+        when(llmClient.extractAssertions("Section B", "Noesis analyzes documents.")).thenReturn(List.of(assertion2));
+
+        // Run assertion extraction for v1
+        assertionExtractionService.processDocumentAssertions(documentId);
+
+        // Verify initial assertions
+        List<AssertionEntity> v1Assertions = assertionJpaRepository.findAll();
+        assertEquals(2, v1Assertions.size());
+
+        // Step 2: Set up v2
+        DocumentEntity document = documentRepository.findById(documentId).orElseThrow();
+        document.setVersion(2);
+        document.setIngestionRunId(UUID.randomUUID().toString());
+        documentRepository.save(document);
+
+        // Clear completed chunk cache for v2 run in state.db
+        String relativePath = noesisStateService.getRelativePathString(document.getAbsolutePath());
+        noesisStateService.upsertDocumentState(
+                relativePath,
+                DocumentStatus.PROCESSING_ASSERTIONS,
+                "PROCESSING_ASSERTIONS",
+                0, null, null, "", 2, document.getChecksum()
+        );
+
+        // v2 Chunk 1: Unchanged normalized content, but has a simple punctuation change (comma added)
+        // Checksum remains "checksum-a" after normalization
+        UUID chunk1V2Id = UUID.randomUUID();
+        ChunkEntity chunk1V2 = ChunkEntity.builder()
+                .id(chunk1V2Id)
+                .documentId(UUID.fromString(documentId))
+                .documentVersion(2)
+                .sectionPath("Section A")
+                .content("Noesis, processes pipelines.")
+                .normalizedContent("noesis processes pipelines")
+                .chunkChecksum("checksum-a") // Matches chunk1 checksum because punctuation "," was stripped!
+                .sequenceNumber(0)
+                .createdAt(Instant.now())
+                .build();
+
+        // v2 Chunk 2: Modified content
+        UUID chunk2V2Id = UUID.randomUUID();
+        ChunkEntity chunk2V2 = ChunkEntity.builder()
+                .id(chunk2V2Id)
+                .documentId(UUID.fromString(documentId))
+                .documentVersion(2)
+                .sectionPath("Section B")
+                .content("Noesis parses logs.")
+                .normalizedContent("noesis parses logs")
+                .chunkChecksum("checksum-b-modified")
+                .sequenceNumber(1)
+                .createdAt(Instant.now())
+                .build();
+
+        chunkJpaRepository.saveAll(List.of(chunk1V2, chunk2V2));
+
+        // Mock LLM only for the modified Chunk 2!
+        AssertionExtractionResponse assertion3 = new AssertionExtractionResponse();
+        assertion3.setSubjectText("Noesis");
+        assertion3.setPredicate("PARSES");
+        assertion3.setObjectText("logs");
+        assertion3.setRawText("Noesis parses logs");
+        assertion3.setNormalizedText("Noesis parses logs");
+        assertion3.setAttributes(new HashMap<>());
+
+        // Reset LLM mock to ensure it is not called for Chunk 1
+        Mockito.reset(llmClient);
+        when(llmClient.extractAssertions("Section B", "Noesis parses logs.")).thenReturn(List.of(assertion3));
+
+        // Run assertion extraction for v2
+        assertionExtractionService.processDocumentAssertions(documentId);
+
+        // Verify that:
+        // 1. LLM was NOT called for Section A (unchanged chunk)
+        Mockito.verify(llmClient, Mockito.never()).extractAssertions(Mockito.eq("Section A"), anyString());
+        // 2. LLM WAS called for Section B (modified chunk)
+        Mockito.verify(llmClient, Mockito.times(1)).extractAssertions(Mockito.eq("Section B"), Mockito.eq("Noesis parses logs."));
+
+        // Verify assertions saved in the DB
+        List<AssertionEntity> allAssertions = assertionJpaRepository.findAll();
+        // v1 has 2 assertions, v2 should have 2 assertions (1 reused + 1 new) -> total 4 in the repository
+        assertEquals(4, allAssertions.size());
+
+        List<AssertionEntity> v2Assertions = allAssertions.stream()
+                .filter(a -> a.getDocumentVersion() == 2)
+                .collect(Collectors.toList());
+        assertEquals(2, v2Assertions.size());
+
+        // One cloned assertion (reused from v1)
+        AssertionEntity reused = v2Assertions.stream()
+                .filter(a -> a.getChunkId().equals(chunk1V2Id))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("PROCESSES", reused.getPredicate());
+        assertEquals("Noesis", reused.getSubject());
+        assertEquals("pipelines", reused.getObject());
+        assertEquals(UUID.fromString(document.getIngestionRunId()), reused.getIngestionRunId());
+
+        // One new assertion (extracted via LLM)
+        AssertionEntity newlyExtracted = v2Assertions.stream()
+                .filter(a -> a.getChunkId().equals(chunk2V2Id))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("PARSES", newlyExtracted.getPredicate());
+        assertEquals("Noesis", newlyExtracted.getSubject());
+        assertEquals("logs", newlyExtracted.getObject());
+        assertEquals(UUID.fromString(document.getIngestionRunId()), newlyExtracted.getIngestionRunId());
     }
 }

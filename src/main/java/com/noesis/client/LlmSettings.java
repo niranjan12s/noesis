@@ -17,6 +17,7 @@ public class LlmSettings {
     private String customRequestTemplate = "";
     private String customResponsePath = "";
     private RateLimiterConfig rateLimiter = new RateLimiterConfig();
+    private java.util.List<String> watchDirectories = new java.util.ArrayList<>();
 
     @Data
     @NoArgsConstructor

@@ -212,11 +212,11 @@ public class MarkdownChunkingService {
         String normalizedContent = content.toLowerCase()
                 .replaceAll("(?m)^#+\\s*(.*)$", "$1") // Strip markdown headings
                 .replaceAll("(?s)```.*?\\n(.*?)```", "$1") // Strip code blocks syntax
-                .replaceAll("[*`_~>\\-\\[\\]]", "") // Strip other markdown chars
+                .replaceAll("[*`_~>\\-\\[\\],\\.\\?\\!\\;\\:\\'\\\"]", "") // Strip other markdown chars and common punctuation
                 .replaceAll("\\s+", " ") // Whitespace cleanup
                 .trim();
 
-        String checksumInput = sectionPath + content;
+        String checksumInput = sectionPath + normalizedContent;
         String chunkChecksum = computeChecksum(checksumInput);
 
         return ChunkEntity.builder()

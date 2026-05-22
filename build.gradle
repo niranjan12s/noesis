@@ -77,4 +77,11 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    jvmArgs = ['-Xmx768m', '-XX:MaxMetaspaceSize=256m', '-XX:+UseSerialGC', '-XX:TieredStopAtLevel=1']
 }
+
+tasks.withType(JavaCompile).configureEach {
+    options.fork = true
+    options.forkOptions.jvmArgs = ['-Xmx192m', '-XX:MaxMetaspaceSize=64m', '-XX:+UseSerialGC', '-XX:TieredStopAtLevel=1']
+}
+

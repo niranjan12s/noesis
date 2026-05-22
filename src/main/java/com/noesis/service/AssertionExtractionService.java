@@ -116,6 +116,12 @@ public class AssertionExtractionService {
             List<AssertionEntity> allAssertions = new ArrayList<>();
             List<String> completedChunkIds = noesisStateService.getCompletedChunkIds(relativePath);
 
+            // Fetch previous version chunks for incremental diffing
+            List<ChunkEntity> previousChunks = new ArrayList<>();
+            if (document.getVersion() > 1) {
+                previousChunks = chunkJpaRepository.findByDocumentIdAndDocumentVersion(documentId, document.getVersion() - 1);
+            }
+
             // Pre-load existing assertion checksums for dedup
             List<String> existingChecksums = assertionJpaRepository.findChecksumsByDocumentId(documentId);
 
@@ -125,6 +131,56 @@ public class AssertionExtractionService {
                 // PARTIAL PROGRESS PRESERVATION check
                 if (completedChunkIds.contains(chunkIdStr)) {
                     log.info("Partial Progress: Chunk {} is already completed. Skipping extraction.", chunkIdStr);
+                    continue;
+                }
+
+                // Check if chunk is unchanged from the previous version
+                ChunkEntity matchedPrevChunk = null;
+                for (ChunkEntity pc : previousChunks) {
+                    if (pc.getChunkChecksum().equals(chunk.getChunkChecksum())) {
+                        matchedPrevChunk = pc;
+                        break;
+                    }
+                }
+
+                if (matchedPrevChunk != null) {
+                    log.info("Chunk Diffing: Chunk {} is unchanged (checksum matched previous version chunk {}). Reusing assertions without calling LLM.", 
+                            chunkIdStr, matchedPrevChunk.getId());
+                    List<AssertionEntity> prevAssertions = assertionJpaRepository.findByChunkId(matchedPrevChunk.getId());
+                    List<AssertionEntity> clonedAssertions = new ArrayList<>();
+                    for (AssertionEntity pa : prevAssertions) {
+                        AssertionEntity cloned = AssertionEntity.builder()
+                                .id(UUID.randomUUID())
+                                .chunkId(chunk.getId())
+                                .documentId(chunk.getDocumentId())
+                                .documentVersion(document.getVersion())
+                                .ingestionRunId(document.getIngestionRunId() != null ? UUID.fromString(document.getIngestionRunId()) : null)
+                                .subjectNodeId(null) // Will be updated during the graph building phase
+                                .objectNodeId(null)
+                                .rawText(pa.getRawText())
+                                .normalizedText(pa.getNormalizedText())
+                                .subject(pa.getSubject())
+                                .predicate(pa.getPredicate())
+                                .object(pa.getObject())
+                                .attributes(pa.getAttributes() != null ? new java.util.HashMap<>(pa.getAttributes()) : null)
+                                .extractionModel(pa.getExtractionModel())
+                                .semanticChecksum(pa.getSemanticChecksum())
+                                .evidenceChecksum(pa.getEvidenceChecksum())
+                                .projectRoot(pa.getProjectRoot())
+                                .createdAt(Instant.now())
+                                .build();
+                        
+                        if (!existingChecksums.contains(cloned.getSemanticChecksum())) {
+                            clonedAssertions.add(cloned);
+                            existingChecksums.add(cloned.getSemanticChecksum());
+                        }
+                    }
+
+                    assertionJpaRepository.saveAll(clonedAssertions);
+                    allAssertions.addAll(clonedAssertions);
+
+                    // Add this chunk to the completed list in SQLite
+                    noesisStateService.addCompletedChunk(relativePath, chunkIdStr);
                     continue;
                 }
 
