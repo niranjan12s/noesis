@@ -1,14 +1,22 @@
 @echo off
-title Noesis — Stopping
-cd /d "%~dp0"
+title Noesis - Stopping
+cd /d "%~dp0.."
 
 echo ============================================
-echo  Noesis Platform — Stopping All Services
+echo  Noesis Platform - Stopping All Services
 echo ============================================
 echo.
 
 REM ── 1. Stop Java process ───────────────────────────────────────────────────
 echo [1/2] Stopping Noesis application...
+
+REM Kill any process listening on port 8081 (Noesis default port)
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr :8081 ^| findstr LISTENING') do (
+    taskkill /f /pid %%a >nul 2>&1
+    echo   Killed PID %%a on port 8081
+)
+
+REM Fallback: kill by WMIC name match
 for /f "tokens=2 delims==" %%i in ('wmic process where "name='java.exe' and commandline like '%%noesis%%'" get processid /value 2^>nul ^| find "="') do (
     taskkill /f /pid %%i >nul 2>&1
     echo   Killed PID %%i
@@ -30,5 +38,5 @@ echo ============================================
 echo  Noesis has been stopped.
 echo  Start again with:  noesis-start.bat
 echo ============================================
-title Noesis — Stopped
+title Noesis - Stopped
 pause

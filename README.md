@@ -480,15 +480,38 @@ Each result links to the source document and chunk that produced the assertion. 
 
 ### Quick start
 
-```
-.\noesis-start.bat     # Docker → build JAR → launch on :8081
-.\noesis-stop.bat      # stop app → docker-compose down
-```
+**Using the Unified CLI (Recommended):**
+
+You can run commands directly using the CLI wrapper (`noesis.bat` on Windows, `./noesis.sh` on macOS/Linux), which automatically detects your operating system and executes the correct scripts:
+
+* **Windows:**
+  ```cmd
+  noesis.bat start       # Start infrastructure & application
+  noesis.bat stop        # Stop infrastructure & application
+  noesis.bat build       # Build application
+  noesis.bat test        # Run tests
+  ```
+* **macOS & Linux:**
+  First, make the scripts executable:
+  ```bash
+  chmod +x *.sh bin/*.sh
+  ```
+  Then run:
+  ```bash
+  ./noesis.sh start      # Start infrastructure & application
+  ./noesis.sh stop       # Stop infrastructure & application
+  ./noesis.sh build      # Build application
+  ./noesis.sh test       # Run tests
+  ```
+
+Alternatively, you can run the individual platform-specific scripts directly from the root folder:
+* **Windows:** `.\bin\noesis-start.bat` and `.\bin\noesis-stop.bat`
+* **macOS/Linux:** `./bin/noesis-start.sh` and `./bin/noesis-stop.sh`
 
 ### Configuration
 
-```
-python noesis.py setup      # interactive LLM provider config
+```bash
+python3 noesis.py setup      # interactive LLM provider config
 ```
 
 Or from the Settings tab in the dashboard (`http://localhost:8081`). File glob patterns in `.noesis/config.json`:
@@ -510,7 +533,7 @@ Or from the Settings tab in the dashboard (`http://localhost:8081`). File glob p
 | `POST /api/documents/upload` | Upload a file for ingestion |
 | `DELETE /api/documents/{id}` | Soft delete (5 min grace window) |
 | `POST /api/documents/{id}/hard-delete` | Force delete |
-| `GET /a+pi/tools/query_graph?text=...&depth=3` | BM25 → BFS graph query |
+| `GET /api/tools/query_graph?text=...&depth=3` | BM25 → BFS graph query |
 | `GET /api/predicates/active` | List canonical predicates |
 | `GET /api/predicates/failed` | Predicates pending human review |
 | `POST /api/predicates/approve?name=...` | Approve a failed predicate |
@@ -518,3 +541,57 @@ Or from the Settings tab in the dashboard (`http://localhost:8081`). File glob p
 | `PUT /api/llm/config` | Update LLM config at runtime |
 | `GET /api/bulk/start` | Start bulk ingestion job |
 | `GET /actuator/health` | System health |
+
+## 9. Model Context Protocol (MCP) Integration
+
+Noesis includes a built-in Model Context Protocol (MCP) server (`mcp_server.py`) that allows AI clients (like Claude Desktop or Cursor) to directly query the semantic knowledge graph, navigate related assertions, trace entity neighbors, and trigger new document ingestions.
+
+### Prerequisites
+
+The MCP server depends on `mcp` and `httpx`. Install them in your Python environment:
+```bash
+pip install mcp httpx
+```
+
+### Configuration Instructions
+
+#### 1. Claude Desktop
+Add the following configuration block to your Claude Desktop configuration file:
+* **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+* **macOS / Linux**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "noesis-mcp": {
+      "command": "python",
+      "args": [
+        "C:\\path\\to\\neosis\\mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\path\\to\\neosis"
+      }
+    }
+  }
+}
+```
+*(On macOS/Linux, replace `python` with `python3` and update the paths to match your absolute path to the repository).*
+
+#### 2. Cursor IDE
+To integrate Noesis directly into Cursor:
+1. Open Cursor and go to **Settings** ➔ **Features** ➔ **MCP**.
+2. Click **+ Add New MCP Server**.
+3. Configure the fields:
+   * **Name**: `noesis-mcp`
+   * **Type**: `command`
+   * **Command**: `python -u C:\path\to\neosis\mcp_server.py` *(use `python3` and absolute UNIX pathing on Mac/Linux)*.
+4. Click **Save**.
+
+### Available MCP Tools
+
+Once connected, your AI client will have access to these deterministic traversal tools:
+* **`query_graph(text, depth)`**: BM25 lookup + BFS graph neighbor expansion.
+* **`explain_path_by_assertion_id(assertionId)`**: Traces neighboring nodes, edges, and provenance for an assertion.
+* **`get_node_neighbour(nodeId, depth)`**: Retrieves connected adjacent nodes and edges for a node.
+* **`get_assertion_by_id(assertionId)`**: Retrieves an assertion by its ID.
+* **`trigger_ingest(path)`**: Synchronously triggers AST chunking, LLM extraction, and graph resolution for a specific file.

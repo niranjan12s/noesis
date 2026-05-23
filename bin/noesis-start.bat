@@ -1,9 +1,9 @@
 @echo off
-title Noesis — Starting
-cd /d "%~dp0"
+title Noesis - Starting
+cd /d "%~dp0.."
 
 echo ============================================
-echo  Noesis Platform — Starting All Services
+echo  Noesis Platform - Starting All Services
 echo ============================================
 echo.
 
@@ -54,7 +54,7 @@ if not defined PYTHON_CMD (
 )
 
 REM Run interactive setup
-%PYTHON_CMD% "%~dp0noesis.py" setup
+%PYTHON_CMD% "%~dp0..\noesis.py" setup
 if %ERRORLEVEL% neq 0 (
     echo ERROR: LLM configuration setup failed.
     pause
@@ -63,7 +63,7 @@ if %ERRORLEVEL% neq 0 (
 
 REM Load decrypted configuration variables in current process environment
 echo Loading LLM environment configuration...
-for /f "usebackq tokens=1,* delims==" %%A in (`%PYTHON_CMD% "%~dp0noesis.py" get-env`) do (
+for /f "usebackq tokens=1,* delims==" %%A in (`%PYTHON_CMD% "%~dp0..\noesis.py" get-env`) do (
     set "%%A=%%B"
 )
 echo.
@@ -155,4 +155,4 @@ echo.
 echo  Stop with:  noesis-stop.bat
 echo  Dashboard:  http://localhost:8081
 echo.
-title Noesis — Running
+title Noesis - Running

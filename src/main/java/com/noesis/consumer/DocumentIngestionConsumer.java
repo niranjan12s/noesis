@@ -14,7 +14,7 @@ public class DocumentIngestionConsumer {
 
     @KafkaListener(topics = "${app.kafka.topics.ingestion-events:noesis-ingestion-events}", groupId = "noesis-chunking-group")
     public void consumeDocumentEvent(Map<String, Object> payload, Acknowledgment ack) {
-        log.debug("Kafka consumer disabled — pipeline driven by Spring events. Event: {}", payload != null ? payload.get("eventType") : null);
+        log.debug("Kafka consumer disabled - pipeline driven by Spring events. Event: {}", payload != null ? payload.get("eventType") : null);
         if (ack != null) ack.acknowledge();
     }
 }

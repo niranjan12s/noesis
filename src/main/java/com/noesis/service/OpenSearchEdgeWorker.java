@@ -14,7 +14,7 @@ public class OpenSearchEdgeWorker {
 
     @KafkaListener(topics = "${app.kafka.topics.ingestion-events:noesis-ingestion-events}", groupId = "noesis-os-edge-group")
     public void consumeGraphEvent(Map<String, Object> payload, Acknowledgment ack) {
-        log.debug("Kafka consumer disabled — OS indexing handled by GraphComponentService directly. Event: {}", payload != null ? payload.get("eventType") : null);
+        log.debug("Kafka consumer disabled - OS indexing handled by GraphComponentService directly. Event: {}", payload != null ? payload.get("eventType") : null);
         if (ack != null) ack.acknowledge();
     }
 }

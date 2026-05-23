@@ -508,6 +508,16 @@ def setup_cmd(force=False):
                 safe_print("Let's re-enter the configurations.")
                 continue
 
+        safe_print(f"\n{BOLD}Configure Watch Directories:{RESET}")
+        safe_print("  Noesis will watch these folders for any new or modified markdown files.")
+        safe_print("  Enter comma-separated paths or leave empty to watch the project root folder.")
+        watch_input = input("Enter watch directories [default: .]: ").strip()
+        watch_dirs = []
+        if watch_input:
+            watch_dirs = [d.strip() for d in watch_input.split(",") if d.strip()]
+        else:
+            watch_dirs = ["."]
+
         encrypted_key = encrypt_key(api_key)
         config = load_config()
         
@@ -522,9 +532,10 @@ def setup_cmd(force=False):
             "api_key": encrypted_key,
             "base_url": base_url
         }
+        config["watch_directories"] = watch_dirs
         
         save_config(config)
-        safe_print(f"\n{BOLD}{GREEN}★ LLM Configuration successfully saved and encrypted!{RESET}")
+        safe_print(f"\n{BOLD}{GREEN}★ LLM and Watch Configuration successfully saved and encrypted!{RESET}")
         safe_print(f"  Stored in: {BOLD}{CONFIG_FILE}{RESET}")
         break
 
@@ -553,6 +564,102 @@ def get_env_cmd():
     elif provider == "ollama":
         print(f"NOESIS_LLM_BASE_URL={base_url}")
 
+def start_cmd():
+    import subprocess
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if sys.platform == "win32":
+        bat_path = os.path.join(script_dir, "bin", "noesis-start.bat")
+        safe_print(f"{BLUE}Windows detected. Executing: bin/noesis-start.bat{RESET}")
+        try:
+            subprocess.run([bat_path], shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            safe_print(f"{RED}Error: bin/noesis-start.bat failed with exit code {e.returncode}{RESET}", is_error=True)
+            sys.exit(e.returncode)
+    else:
+        sh_path = os.path.join(script_dir, "bin", "noesis-start.sh")
+        safe_print(f"{BLUE}macOS/Linux detected. Executing: ./bin/noesis-start.sh{RESET}")
+        try:
+            os.chmod(sh_path, 0o755)
+        except Exception:
+            pass
+        try:
+            subprocess.run([sh_path], check=True)
+        except subprocess.CalledProcessError as e:
+            safe_print(f"{RED}Error: bin/noesis-start.sh failed with exit code {e.returncode}{RESET}", is_error=True)
+            sys.exit(e.returncode)
+
+def stop_cmd():
+    import subprocess
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if sys.platform == "win32":
+        bat_path = os.path.join(script_dir, "bin", "noesis-stop.bat")
+        safe_print(f"{BLUE}Windows detected. Executing: bin/noesis-stop.bat{RESET}")
+        try:
+            subprocess.run([bat_path], shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            safe_print(f"{RED}Error: bin/noesis-stop.bat failed with exit code {e.returncode}{RESET}", is_error=True)
+            sys.exit(e.returncode)
+    else:
+        sh_path = os.path.join(script_dir, "bin", "noesis-stop.sh")
+        safe_print(f"{BLUE}macOS/Linux detected. Executing: ./bin/noesis-stop.sh{RESET}")
+        try:
+            os.chmod(sh_path, 0o755)
+        except Exception:
+            pass
+        try:
+            subprocess.run([sh_path], check=True)
+        except subprocess.CalledProcessError as e:
+            safe_print(f"{RED}Error: bin/noesis-stop.sh failed with exit code {e.returncode}{RESET}", is_error=True)
+            sys.exit(e.returncode)
+
+def build_cmd():
+    import subprocess
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if sys.platform == "win32":
+        bat_path = os.path.join(script_dir, "bin", "build.bat")
+        safe_print(f"{BLUE}Windows detected. Executing: bin/build.bat{RESET}")
+        try:
+            subprocess.run([bat_path], shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            sys.exit(e.returncode)
+    else:
+        sh_path = os.path.join(script_dir, "bin", "build.sh")
+        safe_print(f"{BLUE}macOS/Linux detected. Executing: ./bin/build.sh{RESET}")
+        try:
+            os.chmod(sh_path, 0o755)
+        except Exception:
+            pass
+        try:
+            subprocess.run([sh_path], check=True)
+        except subprocess.CalledProcessError as e:
+            sys.exit(e.returncode)
+
+def test_cmd():
+    import subprocess
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if sys.platform == "win32":
+        bat_path = os.path.join(script_dir, "bin", "test.bat")
+        safe_print(f"{BLUE}Windows detected. Executing: bin/test.bat{RESET}")
+        try:
+            subprocess.run([bat_path], shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            sys.exit(e.returncode)
+    else:
+        sh_path = os.path.join(script_dir, "bin", "test.sh")
+        safe_print(f"{BLUE}macOS/Linux detected. Executing: ./bin/test.sh{RESET}")
+        try:
+            os.chmod(sh_path, 0o755)
+        except Exception:
+            pass
+        try:
+            subprocess.run([sh_path], check=True)
+        except subprocess.CalledProcessError as e:
+            sys.exit(e.returncode)
+
 def main():
     parser = argparse.ArgumentParser(
         description="Noesis CLI tool for managing document lifecycle and state logs.",
@@ -577,6 +684,18 @@ def main():
 
     # Subcommand: get-env
     subparsers.add_parser("get-env", help="Hidden helper to export decrypted LLM credentials")
+
+    # Subcommand: start
+    subparsers.add_parser("start", help="Start Noesis platform services and application")
+
+    # Subcommand: stop
+    subparsers.add_parser("stop", help="Stop Noesis platform services and application")
+
+    # Subcommand: build
+    subparsers.add_parser("build", help="Build the Noesis application")
+
+    # Subcommand: test
+    subparsers.add_parser("test", help="Run application tests")
     
     args = parser.parse_args()
     
@@ -590,6 +709,14 @@ def main():
         setup_cmd(args.force)
     elif args.command == "get-env":
         get_env_cmd()
+    elif args.command == "start":
+        start_cmd()
+    elif args.command == "stop":
+        stop_cmd()
+    elif args.command == "build":
+        build_cmd()
+    elif args.command == "test":
+        test_cmd()
     else:
         parser.print_help()
 

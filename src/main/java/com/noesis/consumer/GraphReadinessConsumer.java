@@ -14,7 +14,7 @@ public class GraphReadinessConsumer {
 
     @KafkaListener(topics = "${app.kafka.topics.ingestion-events:noesis-ingestion-events}", groupId = "noesis-graph-readiness-group")
     public void consumeIndexCompletion(Map<String, Object> payload, Acknowledgment ack) {
-        log.debug("Kafka consumer disabled — QUERYABLE marking handled by GraphComponentService directly. Event: {}", payload != null ? payload.get("eventType") : null);
+        log.debug("Kafka consumer disabled - QUERYABLE marking handled by GraphComponentService directly. Event: {}", payload != null ? payload.get("eventType") : null);
         if (ack != null) ack.acknowledge();
     }
 }

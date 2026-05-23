@@ -71,7 +71,7 @@ public class PredicateService {
             log.info("Initializing PredicateService - loading active predicates from DB...");
             List<ActivePredicateEntity> activeInDb = activePredicateRepository.findAll();
             if (activeInDb.isEmpty()) {
-                log.warn("No active predicates found in DB — the seed script may not have run yet. " +
+                log.warn("No active predicates found in DB - the seed script may not have run yet. " +
                          "Redis cache will be populated by PredicateSeedService after seeding. " +
                          "Extraction during this window will query the DB directly (also empty).");
                 return;
@@ -136,7 +136,7 @@ public class PredicateService {
     private void loadAliasesIntoRedis() {
         List<PredicateAliasEntity> aliases = aliasRepository.findAll();
         if (aliases.isEmpty()) {
-            log.info("No predicate aliases found in DB — alias Redis hash will be empty.");
+            log.info("No predicate aliases found in DB - alias Redis hash will be empty.");
             return;
         }
         Map<Object, Object> aliasMap = new LinkedHashMap<>();
@@ -657,7 +657,7 @@ public class PredicateService {
         if (name == null || name.isBlank()) return;
         String upperName = name.toUpperCase();
 
-        log.info("Revoking predicate: '{}' — cleaning up edges, nodes, and assertions", upperName);
+        log.info("Revoking predicate: '{}' - cleaning up edges, nodes, and assertions", upperName);
 
         // 1. Remove from active list
         activePredicateRepository.deleteById(upperName);
