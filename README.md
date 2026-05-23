@@ -410,12 +410,6 @@ Noesis prioritizes deterministic traversal, provenance, and recoverability over 
 
 ---
 
-- **Full re-ingestion on document changes**
-
-  File modifications trigger complete document reprocessing. Incremental assertion-level diffing and partial graph mutation are not currently supported.
-
----
-
 - **Entity resolution may over-merge concepts**
 
   Entity normalization intentionally collapses formatting variations across documents. Aggressive normalization can incorrectly merge semantically distinct entities with similar names.
